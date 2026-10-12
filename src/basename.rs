@@ -101,4 +101,58 @@ mod tests {
         assert_eq!(call("foo", &opts(Some("foo"))).unwrap(), "foo");
         assert_eq!(call(".txt", &opts(Some(".txt"))).unwrap(), ".txt");
     }
+
+    // --- Cases lifted from gnu/tests/misc/basename.pl ---
+    // CLI-only cases (missing/extra operands, -a, -s flag form, -z,
+    // quoting style, exit codes) don't apply to this single-operand
+    // function: -a is a caller loop, -s maps to Options.suffix,
+    // -z is output formatting.
+
+    #[test]
+    fn gnu_strips_multiple_trailing_slashes() {
+        // pl cases d, i
+        assert_eq!(call("d/f//", &Options::default()).unwrap(), "f");
+        assert_eq!(call("///a///", &Options::default()).unwrap(), "a");
+    }
+
+    #[test]
+    fn gnu_suffix_pairs() {
+        // pl cases k, m, n, 2
+        assert_eq!(call("aa", &opts(Some("a"))).unwrap(), "a");
+        assert_eq!(call("ba", &opts(Some("a"))).unwrap(), "b");
+        assert_eq!(call("ab", &opts(Some("a"))).unwrap(), "ab");
+        assert_eq!(call("a-a", &opts(Some("-a"))).unwrap(), "a");
+        assert_eq!(call("fs", &opts(Some("s"))).unwrap(), "f");
+    }
+
+    #[test]
+    fn gnu_suffix_applies_after_slash_stripping() {
+        // pl cases 4, 5
+        assert_eq!(call("fs/", &opts(Some("s"))).unwrap(), "f");
+        assert_eq!(
+            call("dir/file.suf", &opts(Some(".suf"))).unwrap(),
+            "file"
+        );
+    }
+
+    #[test]
+    fn gnu_empty_suffix_is_noop() {
+        // pl case 9
+        assert_eq!(call("fs", &opts(Some(""))).unwrap(), "fs");
+    }
+
+    #[test]
+    fn gnu_suffix_slash_does_not_match() {
+        // pl case 10: trailing slashes are not stripped from suffix
+        assert_eq!(call("fs/", &opts(Some("s/"))).unwrap(), "fs");
+    }
+
+    #[test]
+    fn gnu_double_slash_with_suffix() {
+        // pl cases 6, 7. GNU computes // vs / per-platform via stat;
+        // on Linux (this machine) // collapses to /, which is what
+        // this pure-string function returns unconditionally.
+        assert_eq!(call("//", &opts(Some("/"))).unwrap(), "/");
+        assert_eq!(call("//", &opts(Some("//"))).unwrap(), "/");
+    }
 }
