@@ -1,152 +1,144 @@
 //! lcu-echo: dependency-free core for `echo`.
 //! No process::exit, no implicit cwd/env reads, no stdout writes.
-
-//! lcu-echo: dependency-free core for `echo`.
-//! No process::exit, no implicit cwd/env reads, no stdout writes.
 //!
-//! This is the single-operand core: leading CLI words are already
-//! split into `args` and flags by the caller. Flag mapping:
-//! `-n` becomes `Options.trailing_newline = false`,
-//! `-e`/`-E` become `Options.interpret_escapes`. Option *parsing*
-//! itself (combined flags like `-ne`, first-non-option stops parsing,
-//! no `--` handling, `POSIXLY_CORRECT` variants, `--help`/`--version`)
-//! belongs to the CLI layer: it reads `argv`/env, which this pure
-//! function never touches.
+//! The CLI owns argv parsing, `--help`/`--version`, and diagnostics.
+//! This pure core receives the already-parsed operand list and only the
+//! two option flags that affect output: whether backslash escapes are in
+//! effect and whether the trailing newline is suppressed.
+//!
+//! Behavior modeled on installed GNU coreutils 9.10 under `LC_ALL=C`:
+//! - Default is no escape processing.
+//! - `-e` enables escape processing.
+//! - `-E` disables escape processing.
+//! - `-n` suppresses the trailing newline.
+//! - `echo` has no `\\u`/`\\U`/`\\"` escapes.
+//! - Octal accepts up to 3 digits and the `\\0NNN` GNU 4-digit form.
+//! - Incomplete `\\x` is emitted literally.
+//! - `\\c` stops all further output; exit stays success.
 
 use std::ffi::{OsStr, OsString};
-use std::os::unix::ffi::{OsStrExt, OsStringExt};
+use std::os::unix::ffi::OsStringExt;
+
+/// Options for `echo`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Options {
+    /// True when backslash escapes should be interpreted.
+    pub escapes: bool,
+    /// True when the trailing newline should be suppressed.
+    pub no_newline: bool,
+}
 
 /// Error type for `echo`.
 ///
-/// `echo` is infallible: every input maps to an output, so this enum
-/// has no variants.
-#[derive(Debug)]
-pub enum Error {}
-
-/// Options for `echo`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Options {
-    /// Interpret backslash escapes (`-e`). When false (`-E`, the GNU
-    /// default without `POSIXLY_CORRECT`), backslashes pass through
-    /// literally, including `\c`.
-    pub interpret_escapes: bool,
-    /// Emit the trailing newline (`-n` sets this to false). A `\c`
-    /// escape in the input forces this off regardless.
-    pub trailing_newline: bool,
-}
-
-impl Default for Options {
-    /// GNU default without `POSIXLY_CORRECT`: escapes off, newline on.
-    fn default() -> Self {
-        Options {
-            interpret_escapes: false,
-            trailing_newline: true,
-        }
-    }
-}
-
-/// The computed output: `text` holds the exact bytes (escapes may
-/// produce non-UTF8 bytes, hence `OsString`), and `trailing_newline`
-/// tells the caller whether to append the line terminator.
+/// `echo` never fails in the core: every operand list maps to output
+/// bytes and GNU echo exits 0 (write failures happen in the CLI), so
+/// this enum has no variants.
 #[derive(Debug, PartialEq, Eq)]
-pub struct Output {
-    pub text: OsString,
-    pub trailing_newline: bool,
-}
+pub enum Error {}
 
 /// Entry point for `echo`. Explicit params only, no implicit state.
 ///
-/// Joins `args` with single spaces, interpreting backslash escapes
-/// per GNU when `options.interpret_escapes` is set. A `\c` escape ends
-/// output immediately and clears `trailing_newline`.
-pub fn call(args: &[&OsStr], options: &Options) -> Result<Output, Error> {
-    let mut out: Vec<u8> = Vec::new();
+/// `args` is the operand list *after* CLI option parsing.
+pub fn call(args: &[&OsStr], options: &Options) -> Result<OsString, Error> {
+    let mut out = Vec::new();
     let mut stopped = false;
-    if options.interpret_escapes {
-        'args: for (i, arg) in args.iter().enumerate() {
-            if i > 0 {
-                out.push(b' ');
-            }
-            let bytes = arg.as_bytes();
-            let mut j = 0;
-            while j < bytes.len() {
-                let c = bytes[j];
-                if c != b'\\' || j + 1 >= bytes.len() {
-                    out.push(c);
-                    j += 1;
-                    continue;
-                }
-                match bytes[j + 1] {
-                    b'a' => out.push(0x07),
-                    b'b' => out.push(0x08),
-                    b'e' => out.push(0x1b),
-                    b'f' => out.push(0x0c),
-                    b'n' => out.push(0x0a),
-                    b'r' => out.push(0x0d),
-                    b't' => out.push(0x09),
-                    b'v' => out.push(0x0b),
-                    b'\\' => out.push(b'\\'),
-                    b'c' => {
-                        stopped = true;
-                        break 'args;
-                    }
-                    b'x' => {
-                        if j + 2 < bytes.len() && is_hex(bytes[j + 2]) {
-                            let mut v = hex_val(bytes[j + 2]);
-                            j += 3;
-                            if j < bytes.len() && is_hex(bytes[j]) {
-                                v = v * 16 + hex_val(bytes[j]);
-                                j += 1;
-                            }
-                            out.push(v);
-                            continue;
-                        }
-                        out.push(b'\\');
-                        out.push(b'x');
-                    }
-                    b'0'..=b'7' => {
-                        // Up to 3 octal digits, or 4 when leading with
-                        // \0 (mirrors echo.c: case '0' consumes one
-                        // digit before falling through to two more).
-                        let max = if bytes[j + 1] == b'0' { 4 } else { 3 };
-                        let mut v: u32 = 0;
-                        let mut k = j + 1;
-                        for _ in 0..max {
-                            if k < bytes.len() && (b'0'..=b'7').contains(&bytes[k]) {
-                                v = v * 8 + u32::from(bytes[k] - b'0');
-                                k += 1;
-                            } else {
-                                break;
-                            }
-                        }
-                        out.push((v & 0xff) as u8);
-                        j = k;
-                        continue;
-                    }
-                    other => {
-                        out.push(b'\\');
-                        out.push(other);
-                    }
-                }
-                j += 2;
-            }
+    for (i, arg) in args.iter().enumerate() {
+        if stopped {
+            break;
         }
-    } else {
-        for (i, arg) in args.iter().enumerate() {
-            if i > 0 {
-                out.push(b' ');
-            }
-            out.extend_from_slice(arg.as_bytes());
+        if i > 0 {
+            out.push(b' ');
+        }
+        if options.escapes {
+            stopped = emit_echo_arg(&mut out, arg.as_encoded_bytes());
+        } else {
+            out.extend_from_slice(arg.as_encoded_bytes());
         }
     }
-    Ok(Output {
-        text: OsString::from_vec(out),
-        trailing_newline: options.trailing_newline && !stopped,
-    })
+    // GNU: `\c` stops all further output, including the trailing newline.
+    if !stopped && !options.no_newline {
+        out.push(b'\n');
+    }
+    Ok(OsString::from_vec(out))
 }
 
-fn is_hex(c: u8) -> bool {
-    c.is_ascii_hexdigit()
+/// Emit one argument's bytes, returning true if `\c` stopped output.
+fn emit_echo_arg(out: &mut Vec<u8>, s: &[u8]) -> bool {
+    let mut j = 0;
+    while j < s.len() {
+        let c = s[j];
+        if c == b'\\' && j + 1 < s.len() {
+            let (emit, next, stop) = parse_echo_escape(s, j + 1);
+            out.extend_from_slice(&emit);
+            if stop {
+                return true;
+            }
+            j = next;
+        } else {
+            out.push(c);
+            j += 1;
+        }
+    }
+    false
+}
+
+fn parse_echo_escape(s: &[u8], pos: usize) -> (Vec<u8>, usize, bool) {
+    if pos >= s.len() {
+        return (vec![b'\\'], pos, false);
+    }
+    match s[pos] {
+        b'a' => (vec![0x07], pos + 1, false),
+        b'b' => (vec![0x08], pos + 1, false),
+        b'c' => (Vec::new(), pos + 1, true),
+        b'e' => (vec![0x1b], pos + 1, false),
+        b'f' => (vec![0x0c], pos + 1, false),
+        b'n' => (vec![0x0a], pos + 1, false),
+        b'r' => (vec![0x0d], pos + 1, false),
+        b't' => (vec![0x09], pos + 1, false),
+        b'v' => (vec![0x0b], pos + 1, false),
+        b'\\' => (vec![b'\\'], pos + 1, false),
+        b'0' | b'1' | b'2' | b'3' | b'4' | b'5' | b'6' | b'7' => parse_echo_octal(s, pos),
+        b'x' => parse_echo_hex(s, pos + 1),
+        _ => (vec![b'\\', s[pos]], pos + 1, false),
+    }
+}
+
+/// Parse an octal escape starting at `pos`, where `s[pos]` is the first
+/// octal digit. GNU caps octal escapes by digit count: a leading `0`
+/// allows 4 digits total (the `\0NNN` form), any other first digit
+/// allows 3. The accumulated value is masked to 8 bits; digits beyond
+/// the cap stay literal. All limits probed against GNU 9.10.
+fn parse_echo_octal(s: &[u8], pos: usize) -> (Vec<u8>, usize, bool) {
+    let max = if s[pos] == b'0' { 4 } else { 3 };
+    let mut p = pos;
+    let mut val: u32 = 0;
+    let mut digits = 0;
+    while digits < max {
+        match s.get(p) {
+            Some(&c) if (b'0'..=b'7').contains(&c) => {
+                val = val * 8 + u32::from(c - b'0');
+                p += 1;
+                digits += 1;
+            }
+            _ => break,
+        }
+    }
+    (vec![(val & 0xff) as u8], p, false)
+}
+
+fn parse_echo_hex(s: &[u8], mut pos: usize) -> (Vec<u8>, usize, bool) {
+    let mut val: u32 = 0;
+    let mut n = 0;
+    while n < 2 && pos < s.len() && s[pos].is_ascii_hexdigit() {
+        val = val * 16 + u32::from(hex_val(s[pos]));
+        pos += 1;
+        n += 1;
+    }
+    if n == 0 {
+        // GNU: `\x` with no hex digits is emitted literally.
+        return (vec![b'\\', b'x'], pos, false);
+    }
+    (vec![(val & 0xff) as u8], pos, false)
 }
 
 fn hex_val(c: u8) -> u8 {
@@ -161,137 +153,270 @@ fn hex_val(c: u8) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::ffi::{OsStrExt, OsStringExt};
 
-    fn opts(interpret: bool, newline: bool) -> Options {
-        Options {
-            interpret_escapes: interpret,
-            trailing_newline: newline,
-        }
+    fn run(args: &[&str], escapes: bool, no_newline: bool) -> OsString {
+        call(
+            &args.iter().map(OsStr::new).collect::<Vec<_>>(),
+            &Options {
+                escapes,
+                no_newline,
+            },
+        )
+        .unwrap()
     }
 
-    fn run(args: &[&str], options: &Options) -> (Vec<u8>, bool) {
-        let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
-        let out = call(&args, options).unwrap();
-        (out.text.as_bytes().to_vec(), out.trailing_newline)
-    }
-
-    #[test]
-    fn default_options_match_gnu_default() {
-        assert_eq!(opts(false, true), Options::default());
+    fn out_bytes(args: &[&str], escapes: bool, no_newline: bool) -> Vec<u8> {
+        run(args, escapes, no_newline).as_encoded_bytes().to_vec()
     }
 
     #[test]
-    fn joins_args_with_single_space() {
-        // echo.sh: `--` has no end-of-options meaning, echoes literally.
-        assert_eq!(run(&["--", "foo"], &opts(false, true)).0, b"-- foo");
-        assert_eq!(run(&["a", "b", "c"], &opts(false, true)).0, b"a b c");
+    fn empty_args_print_newline() {
+        assert_eq!(out_bytes(&[], false, false), b"\n");
     }
 
     #[test]
-    fn no_args_yields_empty_text() {
-        assert_eq!(run(&[], &opts(false, true)), (b"".to_vec(), true));
+    fn one_arg_prints_with_newline() {
+        assert_eq!(out_bytes(&["hi"], false, false), b"hi\n");
     }
 
     #[test]
-    fn without_interpret_escapes_pass_through() {
-        // GNU default without -e: backslashes (even \c) are literal.
-        assert_eq!(run(&[r"foo\n"], &opts(false, true)).0, b"foo\\n");
-        assert_eq!(run(&[r"a\cb"], &opts(false, true)), (b"a\\cb".to_vec(), true));
+    fn two_args_space_separated() {
+        assert_eq!(out_bytes(&["a", "b"], false, false), b"a b\n");
     }
 
     #[test]
-    fn interprets_letter_escapes() {
-        // echo.sh line 83: od expectation 07 08 1b 0c 0a 0d 09 0b.
+    fn n_suppresses_newline() {
+        assert_eq!(out_bytes(&["hi"], false, true), b"hi");
+    }
+
+    #[test]
+    fn e_enables_escapes() {
+        assert_eq!(out_bytes(&["\\a"], true, false), b"\x07\n");
+    }
+
+    #[test]
+    fn e_disables_default_escape_suppression() {
+        assert_eq!(out_bytes(&["\\n"], true, false), b"\n\n");
+    }
+
+    #[test]
+    fn capital_e_disables_escapes() {
+        assert_eq!(out_bytes(&["\\n"], false, false), b"\\n\n");
+    }
+
+    #[test]
+    fn n_e_escape_no_newline() {
+        assert_eq!(out_bytes(&["\\a"], true, true), b"\x07");
+    }
+
+    #[test]
+    fn escape_backslash() {
+        assert_eq!(out_bytes(&["\\\\"], true, false), b"\\\n");
+    }
+
+    #[test]
+    fn escape_tab() {
+        assert_eq!(out_bytes(&["\\t"], true, false), b"\t\n");
+    }
+
+    #[test]
+    fn escape_vertical_tab() {
+        assert_eq!(out_bytes(&["\\v"], true, false), b"\x0b\n");
+    }
+
+    #[test]
+    fn escape_form_feed() {
+        assert_eq!(out_bytes(&["\\f"], true, false), b"\x0c\n");
+    }
+
+    #[test]
+    fn escape_carriage_return() {
+        assert_eq!(out_bytes(&["\\r"], true, false), b"\r\n");
+    }
+
+    #[test]
+    fn escape_escape() {
+        assert_eq!(out_bytes(&["\\e"], true, false), b"\x1b\n");
+    }
+
+    #[test]
+    fn escape_alert() {
+        assert_eq!(out_bytes(&["\\a"], true, false), b"\x07\n");
+    }
+
+    #[test]
+    fn escape_backspace() {
+        assert_eq!(out_bytes(&["\\b"], true, false), b"\x08\n");
+    }
+
+    #[test]
+    fn escape_octal_short() {
+        // Probed against GNU 9.10: `\0101` reads digits "101" -> 65.
+        assert_eq!(out_bytes(&["\\0101"], true, false), b"A\n");
+    }
+
+    #[test]
+    fn escape_octal_short_777() {
+        assert_eq!(out_bytes(&["\\777"], true, false), b"\xff\n");
+    }
+
+    #[test]
+    fn escape_octal_zero_4_digits() {
+        assert_eq!(out_bytes(&["\\0100"], true, false), b"@\n");
+    }
+
+    // GNU caps octal escapes by digit count, not by value: a leading
+    // `0` allows 4 octal digits total, any other first digit allows 3.
+    // The value is masked to 8 bits; excess digits stay literal.
+    // All expectations probed against GNU 9.10 (`LC_ALL=C echo -e`).
+
+    #[test]
+    fn escape_octal_3_digit_cap_leaves_rest_literal() {
+        // `\1000` -> `\100` (64) + literal `0`.
+        assert_eq!(out_bytes(&["\\1000"], true, false), b"@0\n");
+        // `\1000000` -> `\100` + four literal zeros.
+        assert_eq!(out_bytes(&["\\1000000"], true, false), b"@0000\n");
+    }
+
+    #[test]
+    fn escape_octal_zero_4_digit_cap_leaves_rest_literal() {
+        // `\012345` -> `\0123` (83 = 'S') + literal `45`.
+        assert_eq!(out_bytes(&["\\012345"], true, false), b"S45\n");
+        // `\00777` -> `\0077` (63) + literal `7`.
+        assert_eq!(out_bytes(&["\\00777"], true, false), b"\x3f7\n");
+        // `\01777` -> `\0177` (127) + literal `7`.
+        assert_eq!(out_bytes(&["\\01777"], true, false), b"\x7f7\n");
+        // `\00001234` -> `\0000` (0) + literal `1234`.
+        assert_eq!(out_bytes(&["\\00001234"], true, false), b"\x001234\n");
+        // `\00000` -> `\0000` (0) + literal `0`.
+        assert_eq!(out_bytes(&["\\00000"], true, false), b"\x000\n");
+    }
+
+    #[test]
+    fn escape_octal_masks_to_8_bits_after_full_count() {
+        // `\402` consumes all 3 digits (258) then masks -> 2.
+        assert_eq!(out_bytes(&["\\402"], true, false), b"\x02\n");
+        // `\4000` -> `\400` (256 masked to 0) + literal `0`.
+        assert_eq!(out_bytes(&["\\4000"], true, false), b"\x000\n");
+        // `\0400` -> all 4 digits (256 masked to 0).
+        assert_eq!(out_bytes(&["\\0400"], true, false), b"\x00\n");
+        // `\7777` -> `\777` (511 masked to 255) + literal `7`.
+        assert_eq!(out_bytes(&["\\7777"], true, false), b"\xff7\n");
+        // `\01777` also proves the 4-digit form masks: `\0177` = 127.
+        assert_eq!(out_bytes(&["\\0033"], true, false), b"\x1b\n");
+    }
+
+    #[test]
+    fn escape_octal_stops_at_non_octal_digit() {
+        // `\18` -> `\1` + literal `8`; `\48` -> `\4` + literal `8`.
+        assert_eq!(out_bytes(&["\\18"], true, false), b"\x018\n");
+        assert_eq!(out_bytes(&["\\48"], true, false), b"\x048\n");
+        // `\08` -> `\0` + literal `8`.
+        assert_eq!(out_bytes(&["\\08"], true, false), b"\x008\n");
+    }
+
+    #[test]
+    fn escape_hex_2_digit_cap_leaves_rest_literal() {
+        // `\xFFf` -> 0xFF + literal `f`; `\x0041` -> 0x00 + literal `41`.
+        assert_eq!(out_bytes(&["\\xFFf"], true, false), [0xff, b'f', b'\n']);
+        assert_eq!(out_bytes(&["\\x0041"], true, false), b"\x0041\n");
+    }
+
+    #[test]
+    fn escape_nul() {
+        assert_eq!(out_bytes(&["\\0"], true, false), b"\x00\n");
+    }
+
+    #[test]
+    fn escape_nul_00() {
+        assert_eq!(out_bytes(&["\\00"], true, false), b"\x00\n");
+    }
+
+    #[test]
+    fn escape_nul_000() {
+        assert_eq!(out_bytes(&["\\000"], true, false), b"\x00\n");
+    }
+
+    #[test]
+    fn escape_hex_41() {
+        assert_eq!(out_bytes(&["\\x41"], true, false), b"A\n");
+    }
+
+    #[test]
+    fn escape_hex_case_mixed() {
         assert_eq!(
-            run(&[r"\a\b\e\f\n\r\t\v"], &opts(true, false)).0,
-            b"\x07\x08\x1b\x0c\x0a\x0d\x09\x0b"
+            out_bytes(
+                &["\\x4a\\x4b\\x4c\\x4d\\x4e\\x4f\\x4A\\x4B\\x4C\\x4D\\x4E\\x4F",],
+                true,
+                false,
+            ),
+            b"JKLMNOJKLMNO\n"
         );
     }
 
     #[test]
-    fn interprets_hex_escapes() {
-        // echo.sh line 87: \x4a..\x4f == JKLMNO, both cases.
-        assert_eq!(
-            run(&[r"\x4a\x4b\x4c\x4d\x4e\x4f\x4A\x4B\x4C\x4D\x4E\x4F"], &opts(true, false)).0,
-            b"JKLMNOJKLMNO"
-        );
-        // One hex digit is enough.
-        assert_eq!(run(&[r"\x41"], &opts(true, false)).0, b"A");
+    fn escape_c_stops_output() {
+        assert_eq!(out_bytes(&["foo\\n\\cbar"], true, false), b"foo\n");
     }
 
     #[test]
-    fn incomplete_hex_escape_is_literal() {
-        // echo.sh lines 31-34: unlike printf, kept as-is.
-        assert_eq!(run(&[r"\x"], &opts(true, false)).0, b"\\x");
-        assert_eq!(run(&["a\\xzb"], &opts(true, false)).0, b"a\\xzb");
+    fn escape_c_at_start_stops_output() {
+        assert_eq!(out_bytes(&["\\cfoo"], true, false), b"");
     }
 
     #[test]
-    fn octal_escapes_allow_four_digits() {
-        // echo.sh lines 25-29: \x1b \e \33 \033 \0033 are all 0x1B.
-        assert_eq!(
-            run(&[r"\x1b"], &opts(true, false)).0,
-            run(&[r"\e"], &opts(true, false)).0
-        );
-        assert_eq!(run(&[r"\e"], &opts(true, false)).0, b"\x1b");
-        assert_eq!(run(&[r"\33"], &opts(true, false)).0, b"\x1b");
-        assert_eq!(run(&[r"\033"], &opts(true, false)).0, b"\x1b");
-        assert_eq!(run(&[r"\0033"], &opts(true, false)).0, b"\x1b");
-        // Bare \0 is a single NUL byte.
-        assert_eq!(run(&[r"\0"], &opts(true, false)).0, b"\x00");
+    fn escape_c_with_n_and_no_newline() {
+        assert_eq!(out_bytes(&["\\cfoo"], true, true), b"");
     }
 
     #[test]
-    fn backslash_c_stops_output() {
-        // echo.sh lines 45-48: `foo\n\cbar` yields `foo\n`, no newline.
-        assert_eq!(
-            run(&[r"foo\n\cbar"], &opts(true, true)),
-            (b"foo\n".to_vec(), false)
-        );
-        // Everything after \c is dropped, including later args.
-        assert_eq!(
-            run(&["a\\c", "b"], &opts(true, true)),
-            (b"a".to_vec(), false)
-        );
+    fn escape_c_with_n_no_newline_on_stop() {
+        assert_eq!(out_bytes(&["a\\cb"], true, true), b"a");
     }
 
     #[test]
-    fn no_trailing_newline_option() {
-        // -n: text intact, terminator flag off.
-        assert_eq!(
-            run(&["foo"], &opts(false, false)),
-            (b"foo".to_vec(), false)
-        );
+    fn incomplete_hex_is_literal() {
+        assert_eq!(out_bytes(&["\\x"], true, false), b"\\x\n");
     }
 
     #[test]
-    fn unknown_escapes_stay_literal() {
-        // echo.sh lines 99-119: no \", \u, \U escapes (unlike printf).
-        assert_eq!(run(&["a\\\"b"], &opts(true, false)).0, b"a\\\"b");
-        assert_eq!(run(&["a\\u0041b"], &opts(true, false)).0, b"a\\u0041b");
-        assert_eq!(run(&["\\u"], &opts(true, false)).0, b"\\u");
-        assert_eq!(run(&["\\U0000004"], &opts(true, false)).0, b"\\U0000004");
-        assert_eq!(run(&["\\d"], &opts(true, false)).0, b"\\d");
+    fn incomplete_hex_after_text_is_literal() {
+        assert_eq!(out_bytes(&["foo\\x bar"], true, false), b"foo\\x bar\n");
     }
 
     #[test]
-    fn trailing_backslash_is_literal() {
-        assert_eq!(run(&["foo\\"], &opts(true, false)).0, b"foo\\");
+    fn u_escape_is_literal() {
+        assert_eq!(out_bytes(&["\\u0041"], true, false), b"\\u0041\n");
     }
 
     #[test]
-    fn double_backslash_yields_one() {
-        // echo.sh line 70.
-        assert_eq!(run(&["\\\\"], &opts(true, false)).0, b"\\");
+    fn capital_u_escape_is_literal() {
+        assert_eq!(out_bytes(&["\\U00000041"], true, false), b"\\U00000041\n");
     }
 
     #[test]
-    fn escapes_can_emit_non_utf8_bytes() {
-        // From echo.c hex logic: byte-exact output, not lossy.
-        let (bytes, _) = run(&["\\xff"], &opts(true, false));
-        assert_eq!(bytes, vec![0xff]);
-        let out = call(&[OsStr::new("\\xff")], &opts(true, false)).unwrap();
-        assert_eq!(out.text, OsString::from_vec(vec![0xff]));
+    fn backslash_quote_is_literal() {
+        assert_eq!(out_bytes(&["\\\""], true, false), b"\\\"\n");
+    }
+
+    #[test]
+    fn invalid_octal_digit_is_literal() {
+        assert_eq!(out_bytes(&["\\08"], true, false), b"\x008\n");
+    }
+
+    #[test]
+    fn invalid_octal_digit_after_text_is_literal() {
+        assert_eq!(out_bytes(&["\\8"], true, false), b"\\8\n");
+    }
+
+    #[test]
+    fn escape_c_stops_further_args() {
+        // Probed against GNU 9.10: `echo -e 'a\cb' c` prints just `a`.
+        assert_eq!(out_bytes(&["a\\cb", "c"], true, false), b"a");
+    }
+
+    #[test]
+    fn multiple_args_space_separated_with_escapes() {
+        assert_eq!(out_bytes(&["a\\nb", "c"], true, false), b"a\nb c\n");
     }
 }
