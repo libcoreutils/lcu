@@ -102,4 +102,14 @@ mod tests {
         // display, not the returned string.
         assert_eq!(call("q name/f").unwrap(), "q name");
     }
+
+    #[test]
+    fn gnu_slash_runs() {
+        // Probed against GNU 9.10.
+        assert_eq!(call("a//b").unwrap(), "a");
+        assert_eq!(call("/a/").unwrap(), "/");
+        assert_eq!(call("//a").unwrap(), "/");
+        assert_eq!(call("ab/").unwrap(), ".");
+        assert_eq!(call("a/").unwrap(), ".");
+    }
 }

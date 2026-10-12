@@ -155,4 +155,13 @@ mod tests {
         assert_eq!(call("//", &opts(Some("/"))).unwrap(), "/");
         assert_eq!(call("//", &opts(Some("//"))).unwrap(), "/");
     }
+
+    #[test]
+    fn gnu_interior_and_leading_slash_runs() {
+        // Probed against GNU 9.10: interior runs collapse, leading
+        // runs are skipped to reach the last component.
+        assert_eq!(call("a//b", &Options::default()).unwrap(), "b");
+        assert_eq!(call("//a", &Options::default()).unwrap(), "a");
+        assert_eq!(call("ab/", &Options::default()).unwrap(), "ab");
+    }
 }
