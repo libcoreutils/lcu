@@ -1,0 +1,9 @@
+[package]
+name = "lcu-tac"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Library-first implementation of `tac`. No process spawn, no global state."
+
+[dependencies]

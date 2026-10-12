@@ -1,0 +1,9 @@
+[package]
+name = "lcu-true"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Library-first implementation of `true`. No process spawn, no global state."
+
+[dependencies]

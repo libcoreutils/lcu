@@ -1,0 +1,9 @@
+[package]
+name = "lcu-stty"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Library-first implementation of `stty`. No process spawn, no global state."
+
+[dependencies]

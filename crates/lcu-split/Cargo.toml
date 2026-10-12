@@ -1,0 +1,9 @@
+[package]
+name = "lcu-split"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Library-first implementation of `split`. No process spawn, no global state."
+
+[dependencies]

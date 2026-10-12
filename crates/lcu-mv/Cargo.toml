@@ -1,0 +1,9 @@
+[package]
+name = "lcu-mv"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Library-first implementation of `mv`. No process spawn, no global state."
+
+[dependencies]
