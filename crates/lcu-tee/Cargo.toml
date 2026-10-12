@@ -1,9 +1,0 @@
-[package]
-name = "lcu-tee"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
-description = "Library-first implementation of `tee`. No process spawn, no global state."
-
-[dependencies]

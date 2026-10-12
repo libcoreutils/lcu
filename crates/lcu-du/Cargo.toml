@@ -1,9 +1,0 @@
-[package]
-name = "lcu-du"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
-description = "Library-first implementation of `du`. No process spawn, no global state."
-
-[dependencies]

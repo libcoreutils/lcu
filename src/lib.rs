@@ -1,214 +1,214 @@
 #[cfg(feature = "arch")]
-pub use lcu_arch as arch;
+pub mod arch;
 #[cfg(feature = "b2sum")]
-pub use lcu_b2sum as b2sum;
+pub mod b2sum;
 #[cfg(feature = "base32")]
-pub use lcu_base32 as base32;
+pub mod base32;
 #[cfg(feature = "base64")]
-pub use lcu_base64 as base64;
+pub mod base64;
 #[cfg(feature = "basename")]
-pub use lcu_basename as basename;
+pub mod basename;
 #[cfg(feature = "basenc")]
-pub use lcu_basenc as basenc;
+pub mod basenc;
 #[cfg(feature = "cat")]
-pub use lcu_cat as cat;
+pub mod cat;
 #[cfg(feature = "chcon")]
-pub use lcu_chcon as chcon;
+pub mod chcon;
 #[cfg(feature = "chgrp")]
-pub use lcu_chgrp as chgrp;
+pub mod chgrp;
 #[cfg(feature = "chmod")]
-pub use lcu_chmod as chmod;
+pub mod chmod;
 #[cfg(feature = "chown")]
-pub use lcu_chown as chown;
+pub mod chown;
 #[cfg(feature = "chroot")]
-pub use lcu_chroot as chroot;
+pub mod chroot;
 #[cfg(feature = "cksum")]
-pub use lcu_cksum as cksum;
+pub mod cksum;
 #[cfg(feature = "comm")]
-pub use lcu_comm as comm;
+pub mod comm;
 #[cfg(feature = "cp")]
-pub use lcu_cp as cp;
+pub mod cp;
 #[cfg(feature = "csplit")]
-pub use lcu_csplit as csplit;
+pub mod csplit;
 #[cfg(feature = "cut")]
-pub use lcu_cut as cut;
+pub mod cut;
 #[cfg(feature = "date")]
-pub use lcu_date as date;
+pub mod date;
 #[cfg(feature = "dd")]
-pub use lcu_dd as dd;
+pub mod dd;
 #[cfg(feature = "df")]
-pub use lcu_df as df;
+pub mod df;
 #[cfg(feature = "dir")]
-pub use lcu_dir as dir;
+pub mod dir;
 #[cfg(feature = "dircolors")]
-pub use lcu_dircolors as dircolors;
+pub mod dircolors;
 #[cfg(feature = "dirname")]
-pub use lcu_dirname as dirname;
+pub mod dirname;
 #[cfg(feature = "du")]
-pub use lcu_du as du;
+pub mod du;
 #[cfg(feature = "echo")]
-pub use lcu_echo as echo;
+pub mod echo;
 #[cfg(feature = "env")]
-pub use lcu_env as env;
+pub mod env;
 #[cfg(feature = "expand")]
-pub use lcu_expand as expand;
+pub mod expand;
 #[cfg(feature = "expr")]
-pub use lcu_expr as expr;
+pub mod expr;
 #[cfg(feature = "factor")]
-pub use lcu_factor as factor;
+pub mod factor;
 #[cfg(feature = "false")]
-pub use lcu_false as lcu_false;
+pub mod lcu_false;
 #[cfg(feature = "fmt")]
-pub use lcu_fmt as fmt;
+pub mod fmt;
 #[cfg(feature = "fold")]
-pub use lcu_fold as fold;
+pub mod fold;
 #[cfg(feature = "groups")]
-pub use lcu_groups as groups;
+pub mod groups;
 #[cfg(feature = "head")]
-pub use lcu_head as head;
+pub mod head;
 #[cfg(feature = "hostid")]
-pub use lcu_hostid as hostid;
+pub mod hostid;
 #[cfg(feature = "hostname")]
-pub use lcu_hostname as hostname;
+pub mod hostname;
 #[cfg(feature = "id")]
-pub use lcu_id as id;
+pub mod id;
 #[cfg(feature = "install")]
-pub use lcu_install as install;
+pub mod install;
 #[cfg(feature = "join")]
-pub use lcu_join as join;
+pub mod join;
 #[cfg(feature = "kill")]
-pub use lcu_kill as kill;
+pub mod kill;
 #[cfg(feature = "link")]
-pub use lcu_link as link;
+pub mod link;
 #[cfg(feature = "ln")]
-pub use lcu_ln as ln;
+pub mod ln;
 #[cfg(feature = "logname")]
-pub use lcu_logname as logname;
+pub mod logname;
 #[cfg(feature = "ls")]
-pub use lcu_ls as ls;
+pub mod ls;
 #[cfg(feature = "md5sum")]
-pub use lcu_md5sum as md5sum;
+pub mod md5sum;
 #[cfg(feature = "mkdir")]
-pub use lcu_mkdir as mkdir;
+pub mod mkdir;
 #[cfg(feature = "mkfifo")]
-pub use lcu_mkfifo as mkfifo;
+pub mod mkfifo;
 #[cfg(feature = "mknod")]
-pub use lcu_mknod as mknod;
+pub mod mknod;
 #[cfg(feature = "mktemp")]
-pub use lcu_mktemp as mktemp;
+pub mod mktemp;
 #[cfg(feature = "mv")]
-pub use lcu_mv as mv;
+pub mod mv;
 #[cfg(feature = "nice")]
-pub use lcu_nice as nice;
+pub mod nice;
 #[cfg(feature = "nl")]
-pub use lcu_nl as nl;
+pub mod nl;
 #[cfg(feature = "nohup")]
-pub use lcu_nohup as nohup;
+pub mod nohup;
 #[cfg(feature = "nproc")]
-pub use lcu_nproc as nproc;
+pub mod nproc;
 #[cfg(feature = "numfmt")]
-pub use lcu_numfmt as numfmt;
+pub mod numfmt;
 #[cfg(feature = "od")]
-pub use lcu_od as od;
+pub mod od;
 #[cfg(feature = "paste")]
-pub use lcu_paste as paste;
+pub mod paste;
 #[cfg(feature = "pathchk")]
-pub use lcu_pathchk as pathchk;
+pub mod pathchk;
 #[cfg(feature = "pinky")]
-pub use lcu_pinky as pinky;
+pub mod pinky;
 #[cfg(feature = "pr")]
-pub use lcu_pr as pr;
+pub mod pr;
 #[cfg(feature = "printenv")]
-pub use lcu_printenv as printenv;
+pub mod printenv;
 #[cfg(feature = "printf")]
-pub use lcu_printf as printf;
+pub mod printf;
 #[cfg(feature = "ptx")]
-pub use lcu_ptx as ptx;
+pub mod ptx;
 #[cfg(feature = "pwd")]
-pub use lcu_pwd as pwd;
+pub mod pwd;
 #[cfg(feature = "readlink")]
-pub use lcu_readlink as readlink;
+pub mod readlink;
 #[cfg(feature = "realpath")]
-pub use lcu_realpath as realpath;
+pub mod realpath;
 #[cfg(feature = "rm")]
-pub use lcu_rm as rm;
+pub mod rm;
 #[cfg(feature = "rmdir")]
-pub use lcu_rmdir as rmdir;
+pub mod rmdir;
 #[cfg(feature = "runcon")]
-pub use lcu_runcon as runcon;
+pub mod runcon;
 #[cfg(feature = "seq")]
-pub use lcu_seq as seq;
+pub mod seq;
 #[cfg(feature = "sha1sum")]
-pub use lcu_sha1sum as sha1sum;
+pub mod sha1sum;
 #[cfg(feature = "sha224sum")]
-pub use lcu_sha224sum as sha224sum;
+pub mod sha224sum;
 #[cfg(feature = "sha256sum")]
-pub use lcu_sha256sum as sha256sum;
+pub mod sha256sum;
 #[cfg(feature = "sha384sum")]
-pub use lcu_sha384sum as sha384sum;
+pub mod sha384sum;
 #[cfg(feature = "sha512sum")]
-pub use lcu_sha512sum as sha512sum;
+pub mod sha512sum;
 #[cfg(feature = "shred")]
-pub use lcu_shred as shred;
+pub mod shred;
 #[cfg(feature = "shuf")]
-pub use lcu_shuf as shuf;
+pub mod shuf;
 #[cfg(feature = "sleep")]
-pub use lcu_sleep as sleep;
+pub mod sleep;
 #[cfg(feature = "sort")]
-pub use lcu_sort as sort;
+pub mod sort;
 #[cfg(feature = "split")]
-pub use lcu_split as split;
+pub mod split;
 #[cfg(feature = "stat")]
-pub use lcu_stat as stat;
+pub mod stat;
 #[cfg(feature = "stdbuf")]
-pub use lcu_stdbuf as stdbuf;
+pub mod stdbuf;
 #[cfg(feature = "stty")]
-pub use lcu_stty as stty;
+pub mod stty;
 #[cfg(feature = "sum")]
-pub use lcu_sum as sum;
+pub mod sum;
 #[cfg(feature = "sync")]
-pub use lcu_sync as sync;
+pub mod sync;
 #[cfg(feature = "tac")]
-pub use lcu_tac as tac;
+pub mod tac;
 #[cfg(feature = "tail")]
-pub use lcu_tail as tail;
+pub mod tail;
 #[cfg(feature = "tee")]
-pub use lcu_tee as tee;
+pub mod tee;
 #[cfg(feature = "test")]
-pub use lcu_test as test;
+pub mod test;
 #[cfg(feature = "timeout")]
-pub use lcu_timeout as timeout;
+pub mod timeout;
 #[cfg(feature = "touch")]
-pub use lcu_touch as touch;
+pub mod touch;
 #[cfg(feature = "tr")]
-pub use lcu_tr as tr;
+pub mod tr;
 #[cfg(feature = "true")]
-pub use lcu_true as lcu_true;
+pub mod lcu_true;
 #[cfg(feature = "truncate")]
-pub use lcu_truncate as truncate;
+pub mod truncate;
 #[cfg(feature = "tsort")]
-pub use lcu_tsort as tsort;
+pub mod tsort;
 #[cfg(feature = "tty")]
-pub use lcu_tty as tty;
+pub mod tty;
 #[cfg(feature = "uname")]
-pub use lcu_uname as uname;
+pub mod uname;
 #[cfg(feature = "unexpand")]
-pub use lcu_unexpand as unexpand;
+pub mod unexpand;
 #[cfg(feature = "uniq")]
-pub use lcu_uniq as uniq;
+pub mod uniq;
 #[cfg(feature = "unlink")]
-pub use lcu_unlink as unlink;
+pub mod unlink;
 #[cfg(feature = "uptime")]
-pub use lcu_uptime as uptime;
+pub mod uptime;
 #[cfg(feature = "users")]
-pub use lcu_users as users;
+pub mod users;
 #[cfg(feature = "vdir")]
-pub use lcu_vdir as vdir;
+pub mod vdir;
 #[cfg(feature = "wc")]
-pub use lcu_wc as wc;
+pub mod wc;
 #[cfg(feature = "who")]
-pub use lcu_who as who;
+pub mod who;
 #[cfg(feature = "whoami")]
-pub use lcu_whoami as whoami;
+pub mod whoami;
 #[cfg(feature = "yes")]
-pub use lcu_yes as yes;
+pub mod yes;

@@ -1,241 +1,119 @@
-[workspace]
-resolver = "2"
-members = ["crates/*"]
-
-[workspace.package]
+[package]
+name = "lcu"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/libcoreutils/lcu"
 rust-version = "1.80"
-
-[package]
-name = "lcu"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
 description = "Coreutils as callable Rust functions. No subprocess, no stdout parsing."
-
-[dependencies]
-lcu-arch = { path = "crates/lcu-arch", version = "0.1.0", optional = true }
-lcu-b2sum = { path = "crates/lcu-b2sum", version = "0.1.0", optional = true }
-lcu-base32 = { path = "crates/lcu-base32", version = "0.1.0", optional = true }
-lcu-base64 = { path = "crates/lcu-base64", version = "0.1.0", optional = true }
-lcu-basename = { path = "crates/lcu-basename", version = "0.1.0", optional = true }
-lcu-basenc = { path = "crates/lcu-basenc", version = "0.1.0", optional = true }
-lcu-cat = { path = "crates/lcu-cat", version = "0.1.0", optional = true }
-lcu-chcon = { path = "crates/lcu-chcon", version = "0.1.0", optional = true }
-lcu-chgrp = { path = "crates/lcu-chgrp", version = "0.1.0", optional = true }
-lcu-chmod = { path = "crates/lcu-chmod", version = "0.1.0", optional = true }
-lcu-chown = { path = "crates/lcu-chown", version = "0.1.0", optional = true }
-lcu-chroot = { path = "crates/lcu-chroot", version = "0.1.0", optional = true }
-lcu-cksum = { path = "crates/lcu-cksum", version = "0.1.0", optional = true }
-lcu-comm = { path = "crates/lcu-comm", version = "0.1.0", optional = true }
-lcu-cp = { path = "crates/lcu-cp", version = "0.1.0", optional = true }
-lcu-csplit = { path = "crates/lcu-csplit", version = "0.1.0", optional = true }
-lcu-cut = { path = "crates/lcu-cut", version = "0.1.0", optional = true }
-lcu-date = { path = "crates/lcu-date", version = "0.1.0", optional = true }
-lcu-dd = { path = "crates/lcu-dd", version = "0.1.0", optional = true }
-lcu-df = { path = "crates/lcu-df", version = "0.1.0", optional = true }
-lcu-dir = { path = "crates/lcu-dir", version = "0.1.0", optional = true }
-lcu-dircolors = { path = "crates/lcu-dircolors", version = "0.1.0", optional = true }
-lcu-dirname = { path = "crates/lcu-dirname", version = "0.1.0", optional = true }
-lcu-du = { path = "crates/lcu-du", version = "0.1.0", optional = true }
-lcu-echo = { path = "crates/lcu-echo", version = "0.1.0", optional = true }
-lcu-env = { path = "crates/lcu-env", version = "0.1.0", optional = true }
-lcu-expand = { path = "crates/lcu-expand", version = "0.1.0", optional = true }
-lcu-expr = { path = "crates/lcu-expr", version = "0.1.0", optional = true }
-lcu-factor = { path = "crates/lcu-factor", version = "0.1.0", optional = true }
-lcu-false = { path = "crates/lcu-false", version = "0.1.0", optional = true }
-lcu-fmt = { path = "crates/lcu-fmt", version = "0.1.0", optional = true }
-lcu-fold = { path = "crates/lcu-fold", version = "0.1.0", optional = true }
-lcu-groups = { path = "crates/lcu-groups", version = "0.1.0", optional = true }
-lcu-head = { path = "crates/lcu-head", version = "0.1.0", optional = true }
-lcu-hostid = { path = "crates/lcu-hostid", version = "0.1.0", optional = true }
-lcu-hostname = { path = "crates/lcu-hostname", version = "0.1.0", optional = true }
-lcu-id = { path = "crates/lcu-id", version = "0.1.0", optional = true }
-lcu-install = { path = "crates/lcu-install", version = "0.1.0", optional = true }
-lcu-join = { path = "crates/lcu-join", version = "0.1.0", optional = true }
-lcu-kill = { path = "crates/lcu-kill", version = "0.1.0", optional = true }
-lcu-link = { path = "crates/lcu-link", version = "0.1.0", optional = true }
-lcu-ln = { path = "crates/lcu-ln", version = "0.1.0", optional = true }
-lcu-logname = { path = "crates/lcu-logname", version = "0.1.0", optional = true }
-lcu-ls = { path = "crates/lcu-ls", version = "0.1.0", optional = true }
-lcu-md5sum = { path = "crates/lcu-md5sum", version = "0.1.0", optional = true }
-lcu-mkdir = { path = "crates/lcu-mkdir", version = "0.1.0", optional = true }
-lcu-mkfifo = { path = "crates/lcu-mkfifo", version = "0.1.0", optional = true }
-lcu-mknod = { path = "crates/lcu-mknod", version = "0.1.0", optional = true }
-lcu-mktemp = { path = "crates/lcu-mktemp", version = "0.1.0", optional = true }
-lcu-mv = { path = "crates/lcu-mv", version = "0.1.0", optional = true }
-lcu-nice = { path = "crates/lcu-nice", version = "0.1.0", optional = true }
-lcu-nl = { path = "crates/lcu-nl", version = "0.1.0", optional = true }
-lcu-nohup = { path = "crates/lcu-nohup", version = "0.1.0", optional = true }
-lcu-nproc = { path = "crates/lcu-nproc", version = "0.1.0", optional = true }
-lcu-numfmt = { path = "crates/lcu-numfmt", version = "0.1.0", optional = true }
-lcu-od = { path = "crates/lcu-od", version = "0.1.0", optional = true }
-lcu-paste = { path = "crates/lcu-paste", version = "0.1.0", optional = true }
-lcu-pathchk = { path = "crates/lcu-pathchk", version = "0.1.0", optional = true }
-lcu-pinky = { path = "crates/lcu-pinky", version = "0.1.0", optional = true }
-lcu-pr = { path = "crates/lcu-pr", version = "0.1.0", optional = true }
-lcu-printenv = { path = "crates/lcu-printenv", version = "0.1.0", optional = true }
-lcu-printf = { path = "crates/lcu-printf", version = "0.1.0", optional = true }
-lcu-ptx = { path = "crates/lcu-ptx", version = "0.1.0", optional = true }
-lcu-pwd = { path = "crates/lcu-pwd", version = "0.1.0", optional = true }
-lcu-readlink = { path = "crates/lcu-readlink", version = "0.1.0", optional = true }
-lcu-realpath = { path = "crates/lcu-realpath", version = "0.1.0", optional = true }
-lcu-rm = { path = "crates/lcu-rm", version = "0.1.0", optional = true }
-lcu-rmdir = { path = "crates/lcu-rmdir", version = "0.1.0", optional = true }
-lcu-runcon = { path = "crates/lcu-runcon", version = "0.1.0", optional = true }
-lcu-seq = { path = "crates/lcu-seq", version = "0.1.0", optional = true }
-lcu-sha1sum = { path = "crates/lcu-sha1sum", version = "0.1.0", optional = true }
-lcu-sha224sum = { path = "crates/lcu-sha224sum", version = "0.1.0", optional = true }
-lcu-sha256sum = { path = "crates/lcu-sha256sum", version = "0.1.0", optional = true }
-lcu-sha384sum = { path = "crates/lcu-sha384sum", version = "0.1.0", optional = true }
-lcu-sha512sum = { path = "crates/lcu-sha512sum", version = "0.1.0", optional = true }
-lcu-shred = { path = "crates/lcu-shred", version = "0.1.0", optional = true }
-lcu-shuf = { path = "crates/lcu-shuf", version = "0.1.0", optional = true }
-lcu-sleep = { path = "crates/lcu-sleep", version = "0.1.0", optional = true }
-lcu-sort = { path = "crates/lcu-sort", version = "0.1.0", optional = true }
-lcu-split = { path = "crates/lcu-split", version = "0.1.0", optional = true }
-lcu-stat = { path = "crates/lcu-stat", version = "0.1.0", optional = true }
-lcu-stdbuf = { path = "crates/lcu-stdbuf", version = "0.1.0", optional = true }
-lcu-stty = { path = "crates/lcu-stty", version = "0.1.0", optional = true }
-lcu-sum = { path = "crates/lcu-sum", version = "0.1.0", optional = true }
-lcu-sync = { path = "crates/lcu-sync", version = "0.1.0", optional = true }
-lcu-tac = { path = "crates/lcu-tac", version = "0.1.0", optional = true }
-lcu-tail = { path = "crates/lcu-tail", version = "0.1.0", optional = true }
-lcu-tee = { path = "crates/lcu-tee", version = "0.1.0", optional = true }
-lcu-test = { path = "crates/lcu-test", version = "0.1.0", optional = true }
-lcu-timeout = { path = "crates/lcu-timeout", version = "0.1.0", optional = true }
-lcu-touch = { path = "crates/lcu-touch", version = "0.1.0", optional = true }
-lcu-tr = { path = "crates/lcu-tr", version = "0.1.0", optional = true }
-lcu-true = { path = "crates/lcu-true", version = "0.1.0", optional = true }
-lcu-truncate = { path = "crates/lcu-truncate", version = "0.1.0", optional = true }
-lcu-tsort = { path = "crates/lcu-tsort", version = "0.1.0", optional = true }
-lcu-tty = { path = "crates/lcu-tty", version = "0.1.0", optional = true }
-lcu-uname = { path = "crates/lcu-uname", version = "0.1.0", optional = true }
-lcu-unexpand = { path = "crates/lcu-unexpand", version = "0.1.0", optional = true }
-lcu-uniq = { path = "crates/lcu-uniq", version = "0.1.0", optional = true }
-lcu-unlink = { path = "crates/lcu-unlink", version = "0.1.0", optional = true }
-lcu-uptime = { path = "crates/lcu-uptime", version = "0.1.0", optional = true }
-lcu-users = { path = "crates/lcu-users", version = "0.1.0", optional = true }
-lcu-vdir = { path = "crates/lcu-vdir", version = "0.1.0", optional = true }
-lcu-wc = { path = "crates/lcu-wc", version = "0.1.0", optional = true }
-lcu-who = { path = "crates/lcu-who", version = "0.1.0", optional = true }
-lcu-whoami = { path = "crates/lcu-whoami", version = "0.1.0", optional = true }
-lcu-yes = { path = "crates/lcu-yes", version = "0.1.0", optional = true }
 
 [features]
 default = []
-arch = ["lcu-arch"]
-b2sum = ["lcu-b2sum"]
-base32 = ["lcu-base32"]
-base64 = ["lcu-base64"]
-basename = ["lcu-basename"]
-basenc = ["lcu-basenc"]
-cat = ["lcu-cat"]
-chcon = ["lcu-chcon"]
-chgrp = ["lcu-chgrp"]
-chmod = ["lcu-chmod"]
-chown = ["lcu-chown"]
-chroot = ["lcu-chroot"]
-cksum = ["lcu-cksum"]
-comm = ["lcu-comm"]
-cp = ["lcu-cp"]
-csplit = ["lcu-csplit"]
-cut = ["lcu-cut"]
-date = ["lcu-date"]
-dd = ["lcu-dd"]
-df = ["lcu-df"]
-dir = ["lcu-dir"]
-dircolors = ["lcu-dircolors"]
-dirname = ["lcu-dirname"]
-du = ["lcu-du"]
-echo = ["lcu-echo"]
-env = ["lcu-env"]
-expand = ["lcu-expand"]
-expr = ["lcu-expr"]
-factor = ["lcu-factor"]
-false = ["lcu-false"]
-fmt = ["lcu-fmt"]
-fold = ["lcu-fold"]
-groups = ["lcu-groups"]
-head = ["lcu-head"]
-hostid = ["lcu-hostid"]
-hostname = ["lcu-hostname"]
-id = ["lcu-id"]
-install = ["lcu-install"]
-join = ["lcu-join"]
-kill = ["lcu-kill"]
-link = ["lcu-link"]
-ln = ["lcu-ln"]
-logname = ["lcu-logname"]
-ls = ["lcu-ls"]
-md5sum = ["lcu-md5sum"]
-mkdir = ["lcu-mkdir"]
-mkfifo = ["lcu-mkfifo"]
-mknod = ["lcu-mknod"]
-mktemp = ["lcu-mktemp"]
-mv = ["lcu-mv"]
-nice = ["lcu-nice"]
-nl = ["lcu-nl"]
-nohup = ["lcu-nohup"]
-nproc = ["lcu-nproc"]
-numfmt = ["lcu-numfmt"]
-od = ["lcu-od"]
-paste = ["lcu-paste"]
-pathchk = ["lcu-pathchk"]
-pinky = ["lcu-pinky"]
-pr = ["lcu-pr"]
-printenv = ["lcu-printenv"]
-printf = ["lcu-printf"]
-ptx = ["lcu-ptx"]
-pwd = ["lcu-pwd"]
-readlink = ["lcu-readlink"]
-realpath = ["lcu-realpath"]
-rm = ["lcu-rm"]
-rmdir = ["lcu-rmdir"]
-runcon = ["lcu-runcon"]
-seq = ["lcu-seq"]
-sha1sum = ["lcu-sha1sum"]
-sha224sum = ["lcu-sha224sum"]
-sha256sum = ["lcu-sha256sum"]
-sha384sum = ["lcu-sha384sum"]
-sha512sum = ["lcu-sha512sum"]
-shred = ["lcu-shred"]
-shuf = ["lcu-shuf"]
-sleep = ["lcu-sleep"]
-sort = ["lcu-sort"]
-split = ["lcu-split"]
-stat = ["lcu-stat"]
-stdbuf = ["lcu-stdbuf"]
-stty = ["lcu-stty"]
-sum = ["lcu-sum"]
-sync = ["lcu-sync"]
-tac = ["lcu-tac"]
-tail = ["lcu-tail"]
-tee = ["lcu-tee"]
-test = ["lcu-test"]
-timeout = ["lcu-timeout"]
-touch = ["lcu-touch"]
-tr = ["lcu-tr"]
-true = ["lcu-true"]
-truncate = ["lcu-truncate"]
-tsort = ["lcu-tsort"]
-tty = ["lcu-tty"]
-uname = ["lcu-uname"]
-unexpand = ["lcu-unexpand"]
-uniq = ["lcu-uniq"]
-unlink = ["lcu-unlink"]
-uptime = ["lcu-uptime"]
-users = ["lcu-users"]
-vdir = ["lcu-vdir"]
-wc = ["lcu-wc"]
-who = ["lcu-who"]
-whoami = ["lcu-whoami"]
-yes = ["lcu-yes"]
+arch = []
+b2sum = []
+base32 = []
+base64 = []
+basename = []
+basenc = []
+cat = []
+chcon = []
+chgrp = []
+chmod = []
+chown = []
+chroot = []
+cksum = []
+comm = []
+cp = []
+csplit = []
+cut = []
+date = []
+dd = []
+df = []
+dir = []
+dircolors = []
+dirname = []
+du = []
+echo = []
+env = []
+expand = []
+expr = []
+factor = []
+false = []
+fmt = []
+fold = []
+groups = []
+head = []
+hostid = []
+hostname = []
+id = []
+install = []
+join = []
+kill = []
+link = []
+ln = []
+logname = []
+ls = []
+md5sum = []
+mkdir = []
+mkfifo = []
+mknod = []
+mktemp = []
+mv = []
+nice = []
+nl = []
+nohup = []
+nproc = []
+numfmt = []
+od = []
+paste = []
+pathchk = []
+pinky = []
+pr = []
+printenv = []
+printf = []
+ptx = []
+pwd = []
+readlink = []
+realpath = []
+rm = []
+rmdir = []
+runcon = []
+seq = []
+sha1sum = []
+sha224sum = []
+sha256sum = []
+sha384sum = []
+sha512sum = []
+shred = []
+shuf = []
+sleep = []
+sort = []
+split = []
+stat = []
+stdbuf = []
+stty = []
+sum = []
+sync = []
+tac = []
+tail = []
+tee = []
+test = []
+timeout = []
+touch = []
+tr = []
+true = []
+truncate = []
+tsort = []
+tty = []
+uname = []
+unexpand = []
+uniq = []
+unlink = []
+uptime = []
+users = []
+vdir = []
+wc = []
+who = []
+whoami = []
+yes = []
 full = ["arch", "b2sum", "base32", "base64", "basename", "basenc", "cat", "chcon", "chgrp", "chmod", "chown", "chroot", "cksum", "comm", "cp", "csplit", "cut", "date", "dd", "df", "dir", "dircolors", "dirname", "du", "echo", "env", "expand", "expr", "factor", "false", "fmt", "fold", "groups", "head", "hostid", "hostname", "id", "install", "join", "kill", "link", "ln", "logname", "ls", "md5sum", "mkdir", "mkfifo", "mknod", "mktemp", "mv", "nice", "nl", "nohup", "nproc", "numfmt", "od", "paste", "pathchk", "pinky", "pr", "printenv", "printf", "ptx", "pwd", "readlink", "realpath", "rm", "rmdir", "runcon", "seq", "sha1sum", "sha224sum", "sha256sum", "sha384sum", "sha512sum", "shred", "shuf", "sleep", "sort", "split", "stat", "stdbuf", "stty", "sum", "sync", "tac", "tail", "tee", "test", "timeout", "touch", "tr", "true", "truncate", "tsort", "tty", "uname", "unexpand", "uniq", "unlink", "uptime", "users", "vdir", "wc", "who", "whoami", "yes"]
-
-[lib]
-name = "lcu"
