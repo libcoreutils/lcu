@@ -1,21 +1,26 @@
 //! lcu-true: dependency-free core for `true`.
 //! No process::exit, no implicit cwd/env reads, no stdout writes.
 
-/// Error type for `true` (variants to be filled in per-util).
-#[derive(Debug)]
-pub enum Error {
-    /// Placeholder until real port lands; keeps stub compilable.
-    Todo,
-}
-
-/// Options for `true` (fields to be filled in per-util).
-#[derive(Debug, Default)]
-pub struct Options {
-    /// Placeholder until real port lands; keeps stub constructible.
-    pub _placeholder: bool,
-}
+/// Options for `true`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Options;
 
 /// Entry point for `true`. Explicit params only, no implicit state.
+///
+/// GNU true always succeeds and produces no output.
 pub fn call(_options: &Options) -> Result<(), Error> {
-    todo!("port from GNU/uutils behavior")
+    Ok(())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Error {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn call_succeeds() {
+        assert!(call(&Options::default()).is_ok());
+    }
 }

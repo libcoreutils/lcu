@@ -1,21 +1,35 @@
 //! lcu-false: dependency-free core for `false`.
 //! No process::exit, no implicit cwd/env reads, no stdout writes.
 
-/// Error type for `false` (variants to be filled in per-util).
-#[derive(Debug)]
-pub enum Error {
-    /// Placeholder until real port lands; keeps stub compilable.
-    Todo,
-}
+/// Options for `false`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Options;
 
-/// Options for `false` (fields to be filled in per-util).
-#[derive(Debug, Default)]
-pub struct Options {
-    /// Placeholder until real port lands; keeps stub constructible.
-    pub _placeholder: bool,
+/// Error type for `false`.
+///
+/// `false` always exits with failure and prints nothing, so this enum
+/// carries no diagnostics: `call` returning it *is* the failing status.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Error {
+    /// GNU false exits with status 1 and no diagnostic.
+    Failure,
 }
 
 /// Entry point for `false`. Explicit params only, no implicit state.
+///
+/// GNU false always fails: `call` returns `Err(Error::Failure)`, which
+/// the caller maps to exit status 1. Ignored operands, `--help`, and
+/// `--version` are argv concerns and never reach this core.
 pub fn call(_options: &Options) -> Result<(), Error> {
-    todo!("port from GNU/uutils behavior")
+    Err(Error::Failure)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn call_fails() {
+        assert_eq!(call(&Options::default()), Err(Error::Failure));
+    }
 }
