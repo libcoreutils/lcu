@@ -90,10 +90,7 @@ mod tests {
 
     #[test]
     fn keeps_name_when_suffix_does_not_match() {
-        assert_eq!(
-            call("foo.txt", &opts(Some(".log"))).unwrap(),
-            "foo.txt"
-        );
+        assert_eq!(call("foo.txt", &opts(Some(".log"))).unwrap(), "foo.txt");
     }
 
     #[test]
@@ -129,10 +126,7 @@ mod tests {
     fn gnu_suffix_applies_after_slash_stripping() {
         // pl cases 4, 5
         assert_eq!(call("fs/", &opts(Some("s"))).unwrap(), "f");
-        assert_eq!(
-            call("dir/file.suf", &opts(Some(".suf"))).unwrap(),
-            "file"
-        );
+        assert_eq!(call("dir/file.suf", &opts(Some(".suf"))).unwrap(), "file");
     }
 
     #[test]

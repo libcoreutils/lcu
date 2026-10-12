@@ -58,9 +58,7 @@ impl Error {
                 m.extend_from_slice(b": invalid conversion specification");
                 OsString::from_vec(m)
             }
-            Error::MissingHexNumber => {
-                OsString::from("missing hexadecimal number in escape")
-            }
+            Error::MissingHexNumber => OsString::from("missing hexadecimal number in escape"),
             Error::InvalidUniversalChar { digits } => {
                 OsString::from(format!("invalid universal character name \\{digits}"))
             }
@@ -185,11 +183,7 @@ impl Output {
 /// `args`, reusing the format while arguments remain, exactly like GNU.
 /// Never prints: the caller writes `output.bytes` and maps
 /// `output.exit_code()` to its process status.
-pub fn call(
-    format: &OsStr,
-    args: &[&OsStr],
-    options: &Options,
-) -> Result<Output, FatalError> {
+pub fn call(format: &OsStr, args: &[&OsStr], options: &Options) -> Result<Output, FatalError> {
     let fmt = format.as_bytes();
     let argv: Vec<&[u8]> = args.iter().map(|a| a.as_bytes()).collect();
     let mut st = Run {
@@ -373,7 +367,11 @@ fn parse_escape(bytes: &[u8], pos: usize, octal_0: bool) -> Result<(Vec<u8>, usi
             // matching gnulib print_unicode_char.
             let c = char::from_u32(value).unwrap_or('\u{fffd}');
             let mut buf = [0u8; 4];
-            Ok((c.encode_utf8(&mut buf).as_bytes().to_vec(), pos + 1 + need, false))
+            Ok((
+                c.encode_utf8(&mut buf).as_bytes().to_vec(),
+                pos + 1 + need,
+                false,
+            ))
         }
         other => Ok((vec![b'\\', other], pos + 1, false)),
     }
@@ -410,8 +408,7 @@ fn bare_safe(c: u8, is_first: bool) -> bool {
     c.is_ascii_alphanumeric()
         || matches!(
             c,
-            b'-' | b'_' | b'.' | b'/' | b',' | b':' | b'+' | b'@' | b'%' | b'{' | b'}'
-                | b']'
+            b'-' | b'_' | b'.' | b'/' | b',' | b':' | b'+' | b'@' | b'%' | b'{' | b'}' | b']'
         )
         || (!is_first && matches!(c, b'~' | b'#'))
 }
@@ -575,8 +572,16 @@ fn decode_first(s: &[u8]) -> (u32, usize) {
 }
 
 enum ParsedInt {
-    Char { value: u64, trailing: usize },
-    Num { neg: bool, mag: u128, end: usize, had: bool },
+    Char {
+        value: u64,
+        trailing: usize,
+    },
+    Num {
+        neg: bool,
+        mag: u128,
+        end: usize,
+        had: bool,
+    },
 }
 
 /// Scan a base-0 integer with glibc C2X `0b` support and `'"'`/`'\''`
@@ -602,27 +607,33 @@ fn scan_int(s: &[u8]) -> ParsedInt {
     let mut had = false;
     if j < s.len() && s[j] == b'0' {
         let n1 = *s.get(j + 1).unwrap_or(&0);
-        let has_hex = (n1 == b'x' || n1 == b'X')
-            && s.get(j + 2).is_some_and(|c| c.is_ascii_hexdigit());
-        let has_bin =
-            (n1 == b'b' || n1 == b'B') && matches!(s.get(j + 2), Some(c) if *c == b'0' || *c == b'1');
+        let has_hex =
+            (n1 == b'x' || n1 == b'X') && s.get(j + 2).is_some_and(|c| c.is_ascii_hexdigit());
+        let has_bin = (n1 == b'b' || n1 == b'B')
+            && matches!(s.get(j + 2), Some(c) if *c == b'0' || *c == b'1');
         if has_hex {
             j += 2;
             while j < s.len() && s[j].is_ascii_hexdigit() {
-                mag = mag.saturating_mul(16).saturating_add(u128::from(hex_val(s[j])));
+                mag = mag
+                    .saturating_mul(16)
+                    .saturating_add(u128::from(hex_val(s[j])));
                 j += 1;
                 had = true;
             }
         } else if has_bin {
             j += 2;
             while j < s.len() && (s[j] == b'0' || s[j] == b'1') {
-                mag = mag.saturating_mul(2).saturating_add(u128::from(s[j] - b'0'));
+                mag = mag
+                    .saturating_mul(2)
+                    .saturating_add(u128::from(s[j] - b'0'));
                 j += 1;
                 had = true;
             }
         } else {
             while j < s.len() && (b'0'..=b'7').contains(&s[j]) {
-                mag = mag.saturating_mul(8).saturating_add(u128::from(s[j] - b'0'));
+                mag = mag
+                    .saturating_mul(8)
+                    .saturating_add(u128::from(s[j] - b'0'));
                 j += 1;
                 had = true;
             }
@@ -962,8 +973,15 @@ impl Run {
                     },
                     None => 0,
                 };
-                let base = if conv == b'o' { 8 } else if conv == b'u' { 10 } else { 16 };
-                self.out.extend(fmt_uint(v, false, base, conv == b'X', false, &f));
+                let base = if conv == b'o' {
+                    8
+                } else if conv == b'u' {
+                    10
+                } else {
+                    16
+                };
+                self.out
+                    .extend(fmt_uint(v, false, base, conv == b'X', false, &f));
             }
             b'f' | b'F' | b'e' | b'E' | b'g' | b'G' | b'a' | b'A' => {
                 let v = match arg {
@@ -1075,7 +1093,7 @@ impl Run {
                         INum::I(v) => v,
                         INum::U(v) => v as i64,
                     };
-                    if w < INT_MIN_I64 || w > INT_MAX_I64 {
+                    if !(INT_MIN_I64..=INT_MAX_I64).contains(&w) {
                         return Err(Error::InvalidFieldWidth {
                             arg: OsString::from_vec(args[wi].to_vec()),
                         });
@@ -1085,7 +1103,9 @@ impl Run {
             } else {
                 let mut w: u64 = 0;
                 while p < fmt.len() && fmt[p].is_ascii_digit() {
-                    w = w.saturating_mul(10).saturating_add(u64::from(fmt[p] - b'0'));
+                    w = w
+                        .saturating_mul(10)
+                        .saturating_add(u64::from(fmt[p] - b'0'));
                     p += 1;
                 }
                 width = w.min(PAD_CAP) as i64;
@@ -1126,16 +1146,15 @@ impl Run {
                 } else {
                     let mut pr: u64 = 0;
                     while p < fmt.len() && fmt[p].is_ascii_digit() {
-                        pr = pr.saturating_mul(10).saturating_add(u64::from(fmt[p] - b'0'));
+                        pr = pr
+                            .saturating_mul(10)
+                            .saturating_add(u64::from(fmt[p] - b'0'));
                         p += 1;
                     }
                     prec = Some(pr.min(PAD_CAP));
                 }
             }
-            while matches!(
-                fmt.get(p),
-                Some(b'l' | b'L' | b'h' | b'j' | b't' | b'z')
-            ) {
+            while matches!(fmt.get(p), Some(b'l' | b'L' | b'h' | b'j' | b't' | b'z')) {
                 p += 1;
             }
             let conv = *fmt.get(p).unwrap_or(&0);
@@ -1446,10 +1465,7 @@ fn hexfloat(v: f64, prec: Option<u64>, upper: bool, alt: bool) -> Vec<u8> {
         if ebits == 0 {
             (bits & 0xFFFFFFFFFFFFF, -1074)
         } else {
-            (
-                (bits & 0xFFFFFFFFFFFFF) | (1 << 52),
-                ebits - 1023 - 52,
-            )
+            ((bits & 0xFFFFFFFFFFFFF) | (1 << 52), ebits - 1023 - 52)
         }
     };
     let (mut digits, mut exp) = if s == 0 {
@@ -1460,13 +1476,15 @@ fn hexfloat(v: f64, prec: Option<u64>, upper: bool, alt: bool) -> Vec<u8> {
         let sp = s << pad;
         let ep = e - pad as i32;
         let n = ((bitlen + pad) / 4) as usize;
-        let mut digits: Vec<u8> = (0..n).map(|i| ((sp >> (4 * (n - 1 - i))) & 0xF) as u8).collect();
+        let mut digits: Vec<u8> = (0..n)
+            .map(|i| ((sp >> (4 * (n - 1 - i))) & 0xF) as u8)
+            .collect();
         let mut t = 0;
         while digits.len() > 1 && digits.last() == Some(&0) {
             digits.pop();
             t += 1;
         }
-        (digits, ep + 4 * t as i32)
+        (digits, ep + 4 * t)
     };
     // Placing the point after the first significant digit scales the
     // mantissa by 16^(len-1): the exponent moves the opposite way.
@@ -1577,7 +1595,10 @@ mod tests {
     #[test]
     fn escape_letters() {
         // printf.sh lines 27-30: \x1b \n \33 \e.
-        assert_eq!(run_bytes("\\x1b\\n\\33\\n\\e\\n", &[]), b"\x1b\n\x1b\n\x1b\n");
+        assert_eq!(
+            run_bytes("\\x1b\\n\\33\\n\\e\\n", &[]),
+            b"\x1b\n\x1b\n\x1b\n"
+        );
     }
 
     #[test]
@@ -1603,7 +1624,10 @@ mod tests {
         // printf-cov.pl esc-bad-hex.
         let err = call(OsStr::new("\\x"), &[], &Options::default()).unwrap_err();
         assert_eq!(err.error, Error::MissingHexNumber);
-        assert_eq!(err.message(), OsString::from("missing hexadecimal number in escape"));
+        assert_eq!(
+            err.message(),
+            OsString::from("missing hexadecimal number in escape")
+        );
     }
 
     #[test]
@@ -1644,10 +1668,16 @@ mod tests {
                 digits: "ud800".to_owned()
             }
         );
-        assert_eq!(err.message(), OsString::from("invalid universal character name \\ud800"));
+        assert_eq!(
+            err.message(),
+            OsString::from("invalid universal character name \\ud800")
+        );
         // Uppercase input still reports lowercase digits (like GNU %x).
         let err = call(OsStr::new("\\uD800"), &[], &Options::default()).unwrap_err();
-        assert_eq!(err.message(), OsString::from("invalid universal character name \\ud800"));
+        assert_eq!(
+            err.message(),
+            OsString::from("invalid universal character name \\ud800")
+        );
     }
 
     #[test]
@@ -1703,7 +1733,10 @@ mod tests {
                 spec: OsString::from("%")
             }
         );
-        assert_eq!(err.message(), OsString::from("%: invalid conversion specification"));
+        assert_eq!(
+            err.message(),
+            OsString::from("%: invalid conversion specification")
+        );
     }
 
     #[test]
@@ -1718,7 +1751,10 @@ mod tests {
                 spec: OsString::from("%#d")
             }
         );
-        assert_eq!(fatal.message(), OsString::from("%#d: invalid conversion specification"));
+        assert_eq!(
+            fatal.message(),
+            OsString::from("%#d: invalid conversion specification")
+        );
     }
 
     // --- %s and %c ---
@@ -1858,23 +1894,32 @@ mod tests {
     #[test]
     fn length_modifiers_ignored() {
         // print_direc consumes l L h j t z; glibc 'I' accepted as no-op.
-        assert_eq!(run_bytes("%lld %hd %zd %Id", &["5", "-5", "7", "9"]), b"5 -5 7 9");
+        assert_eq!(
+            run_bytes("%lld %hd %zd %Id", &["5", "-5", "7", "9"]),
+            b"5 -5 7 9"
+        );
         assert_eq!(run_bytes("%LF %LE", &["1", "2"]), b"1.000000 2.000000E+00");
     }
 
     #[test]
     fn int_width_overflow_fatal() {
         // printf-cov.pl d-big-fwidth, d-big-prec (2^31).
-        let err =
-            call(OsStr::new("%*d"), &[OsStr::new("2147483648"), OsStr::new("15")], &Options::default())
-                .unwrap_err();
+        let err = call(
+            OsStr::new("%*d"),
+            &[OsStr::new("2147483648"), OsStr::new("15")],
+            &Options::default(),
+        )
+        .unwrap_err();
         assert_eq!(
             err.error,
             Error::InvalidFieldWidth {
                 arg: OsString::from("2147483648")
             }
         );
-        assert_eq!(err.message(), OsString::from("invalid field width: '2147483648'"));
+        assert_eq!(
+            err.message(),
+            OsString::from("invalid field width: '2147483648'")
+        );
         let err = call(
             OsStr::new("%.*d"),
             &[OsStr::new("2147483648"), OsStr::new("15")],
@@ -1887,7 +1932,10 @@ mod tests {
                 arg: OsString::from("2147483648")
             }
         );
-        assert_eq!(err.message(), OsString::from("invalid precision: '2147483648'"));
+        assert_eq!(
+            err.message(),
+            OsString::from("invalid precision: '2147483648'")
+        );
     }
 
     #[test]
@@ -2153,7 +2201,10 @@ mod tests {
         // printf-quote.sh lines 47-53 (LC_ALL=C row): every byte escaped.
         let arg = OsString::from_vec(vec![0xc3, 0xa1, 0xe1, 0xb8, 0x83, 0xc3, 0xa7]);
         let out = call(OsStr::new("%q"), &[&arg], &Options::default()).unwrap();
-        assert_eq!(out.bytes.as_bytes(), b"''$'\\303\\241\\341\\270\\203\\303\\247'");
+        assert_eq!(
+            out.bytes.as_bytes(),
+            b"''$'\\303\\241\\341\\270\\203\\303\\247'"
+        );
     }
 
     #[test]
@@ -2220,7 +2271,10 @@ mod tests {
 
     #[test]
     fn indexed_mixed_with_sequential() {
-        assert_eq!(run_bytes("%s %3$s %s\\n", &["A", "B", "C", "D"]), b"A C B\nD  \n");
+        assert_eq!(
+            run_bytes("%s %3$s %s\\n", &["A", "B", "C", "D"]),
+            b"A C B\nD  \n"
+        );
         assert_eq!(run_bytes("%1$*d\\n", &["4", "1"]), b"   4\n1\n");
         assert_eq!(run_bytes("%s %s %1$s\\n", &["A", "B"]), b"A B A\n");
         assert_eq!(run_bytes("%100$*d %s %s %s\\n", &["4", "1"]), b"   0 1  \n");
@@ -2354,7 +2408,10 @@ mod tests {
             arg: OsString::from("a\x7fb"),
         }
         .message();
-        assert_eq!(msg.as_encoded_bytes(), b"'a\\177b': expected a numeric value");
+        assert_eq!(
+            msg.as_encoded_bytes(),
+            b"'a\\177b': expected a numeric value"
+        );
         let msg = Warning::ExpectedNumericValue {
             arg: OsString::from("a'b"),
         }

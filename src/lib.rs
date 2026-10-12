@@ -56,8 +56,6 @@ pub mod expand;
 pub mod expr;
 #[cfg(feature = "factor")]
 pub mod factor;
-#[cfg(feature = "false")]
-pub mod lcu_false;
 #[cfg(feature = "fmt")]
 pub mod fmt;
 #[cfg(feature = "fold")]
@@ -78,6 +76,10 @@ pub mod install;
 pub mod join;
 #[cfg(feature = "kill")]
 pub mod kill;
+#[cfg(feature = "false")]
+pub mod lcu_false;
+#[cfg(feature = "true")]
+pub mod lcu_true;
 #[cfg(feature = "link")]
 pub mod link;
 #[cfg(feature = "ln")]
@@ -182,8 +184,6 @@ pub mod timeout;
 pub mod touch;
 #[cfg(feature = "tr")]
 pub mod tr;
-#[cfg(feature = "true")]
-pub mod lcu_true;
 #[cfg(feature = "truncate")]
 pub mod truncate;
 #[cfg(feature = "tsort")]
