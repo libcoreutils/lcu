@@ -11,15 +11,16 @@ pub struct Options;
 /// carries no diagnostics: `call` returning it *is* the failing status.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
-    /// GNU false exits with status 1 and no diagnostic.
+    /// `false` exits with status 1 and no diagnostic.
     Failure,
 }
 
 /// Entry point for `false`. Explicit params only, no implicit state.
 ///
-/// GNU false always fails: `call` returns `Err(Error::Failure)`, which
-/// the caller maps to exit status 1. Ignored operands, `--help`, and
-/// `--version` are argv concerns and never reach this core.
+/// `false` always fails: `call` returns `Err(Error::Failure)`, which
+/// the caller maps to exit status 1 (uutils test_false.rs:
+/// test_no_args). Ignored operands, `--help`, and `--version` are
+/// argv concerns and never reach this core.
 pub fn call(_options: &Options) -> Result<(), Error> {
     Err(Error::Failure)
 }
@@ -30,6 +31,6 @@ mod tests {
 
     #[test]
     fn call_fails() {
-        assert_eq!(call(&Options::default()), Err(Error::Failure));
+        assert_eq!(call(&Options), Err(Error::Failure));
     }
 }

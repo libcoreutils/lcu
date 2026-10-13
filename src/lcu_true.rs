@@ -7,7 +7,9 @@ pub struct Options;
 
 /// Entry point for `true`. Explicit params only, no implicit state.
 ///
-/// GNU true always succeeds and produces no output.
+/// `true` always succeeds and produces no output (uutils
+/// test_true.rs: test_no_args; operands and --help/--version forms
+/// are argv-layer concerns that never reach this core).
 pub fn call(_options: &Options) -> Result<(), Error> {
     Ok(())
 }
@@ -21,6 +23,6 @@ mod tests {
 
     #[test]
     fn call_succeeds() {
-        assert!(call(&Options::default()).is_ok());
+        assert!(call(&Options).is_ok());
     }
 }

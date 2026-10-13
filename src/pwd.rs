@@ -4,9 +4,8 @@
 //! The CLI owns `--help`/`--version`, `-L`/`-P` parsing, the
 //! "ignoring non-option arguments" warning, and reading argv/env:
 //! this pure function receives the current directory, the raw `PWD`
-//! value, and the mode explicitly, and computes what GNU `pwd` would
-//! print under `LC_ALL=C`:
-//! - physical mode (GNU's default, `-P`): `cwd` itself, which must be
+//! value, and the mode explicitly, and computes what `pwd` prints:
+//! - physical mode (the default, `-P`): `cwd` itself, which must be
 //!   the physical current directory (`std::env::current_dir()` on Unix)
 //! - logical mode (`-L`, or the default when `POSIXLY_CORRECT` is set):
 //!   `PWD` is used only when it is absolute, has no `.`/`..`
@@ -23,7 +22,7 @@ pub struct Options {
     /// Raw `PWD` environment value, if set (read by the CLI).
     pub pwd: Option<OsString>,
     /// True for logical mode: `-L`, or `-P` not given while
-    /// `POSIXLY_CORRECT` is set. False for physical mode (GNU default).
+    /// `POSIXLY_CORRECT` is set. False for physical mode (the default).
     pub logical: bool,
 }
 
@@ -37,8 +36,8 @@ pub enum Error {}
 /// Entry point for `pwd`. Explicit params only, no implicit state.
 ///
 /// `cwd` is the process's current directory, physical on Unix (e.g.
-/// from `std::env::current_dir()`). Returns the path GNU `pwd` would
-/// print for the given mode.
+/// from `std::env::current_dir()`). Returns the path `pwd` prints
+/// for the given mode.
 pub fn call(cwd: &Path, options: &Options) -> Result<PathBuf, Error> {
     if options.logical {
         if let Some(pwd) = options.pwd.as_deref() {
@@ -50,12 +49,12 @@ pub fn call(cwd: &Path, options: &Options) -> Result<PathBuf, Error> {
     Ok(cwd.to_path_buf())
 }
 
-/// Return whether GNU `pwd -L` would accept `PWD` value `pwd` for
-/// output, given the physical current directory `cwd`.
+/// Return whether `pwd -L` accepts `PWD` value `pwd` for output,
+/// given the physical current directory `cwd`.
 ///
-/// Mirrors GNU `logical_getcwd`: textual validation first (absolute,
+/// Logical-mode acceptance rule: textual validation first (absolute,
 /// no `.` or `..` components), then a stat comparison against `cwd`
-/// (`pwd` must name the same directory, device + inode).
+/// (`PWD` must name the same directory, device + inode).
 fn pwd_is_logical(pwd: &OsStr, cwd: &Path) -> bool {
     let bytes = pwd.as_encoded_bytes();
     if bytes.first() != Some(&b'/') {
@@ -148,8 +147,10 @@ mod tests {
 
     #[test]
     fn logical_rejects_dot_components() {
-        // uutils test_redundant_logical and friends.
-        for pwd in ["/.", "/a/./b", "/a/../b", "/a/b/..", "/a/b/."] {
+        // uutils test_redundant_logical and friends: any `.`/`..`
+        // component rejects PWD, even one that still names cwd
+        // ("/dev/." would stat-match but must fall back).
+        for pwd in ["/.", "/a/./b", "/a/../b", "/a/b/..", "/a/b/.", "/dev/."] {
             assert_eq!(
                 call(Path::new("/dev"), &opts(Some(pwd), true)).unwrap(),
                 Path::new("/dev"),
