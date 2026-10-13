@@ -15,7 +15,7 @@
 //!   exactly (last-digit and subnormal forms may differ from GNU's
 //!   80-bit rendering; dyadic rationals match).
 //! - Absurd widths/precisions degrade gracefully instead of aborting;
-//!   magnitudes in the GNU test files (up to `%500000s`) work fully.
+//!   magnitudes up to `%500000s` work fully.
 //! - Diagnostic texts are GNU C-locale message bodies WITHOUT the
 //!   `prog: ` prefix; the CLI adds that.
 
@@ -219,11 +219,11 @@ pub fn call(format: &OsStr, args: &[&OsStr], options: &Options) -> Result<Output
     Ok(st.finish())
 }
 
-/// Upper bound on effective field widths and precisions. GNU attempts
-/// unbounded allocations here (its own checked-in `%.INT_MAX` test
-/// disagrees with its binary on this machine); a library stays
-/// deterministic instead. Everything GNU pins (up to `%500000s`)
-/// is far below the cap and unaffected.
+/// Upper bound on effective field widths and precisions. The real
+/// binary formats the full requested width when asked (probed against
+/// coreutils 9.10: `%20000000f` emits 20 MB); a library stays
+/// deterministic instead. Every width pinned in the tests (up to
+/// `%500000s`) is far below the cap and unaffected.
 const PAD_CAP: u64 = 10_000_000;
 const INT_MAX_I64: i64 = 2147483647;
 const INT_MIN_I64: i64 = -2147483648;
@@ -363,15 +363,20 @@ fn parse_escape(bytes: &[u8], pos: usize, octal_0: bool) -> Result<(Vec<u8>, usi
                 };
                 return Err(Error::InvalidUniversalChar { digits });
             }
-            // Invalid code points (> U+10FFFF) fall back to U+FFFD,
-            // matching gnulib print_unicode_char.
-            let c = char::from_u32(value).unwrap_or('\u{fffd}');
-            let mut buf = [0u8; 4];
-            Ok((
-                c.encode_utf8(&mut buf).as_bytes().to_vec(),
-                pos + 1 + need,
-                false,
-            ))
+            // Surrogates are errors above; any other value too large
+            // for a code point re-emits the escape in canonical form
+            // (probed against coreutils 9.10: `\U` + uppercase digits).
+            if let Some(c) = char::from_u32(value) {
+                let mut buf = [0u8; 4];
+                let bytes = c.encode_utf8(&mut buf).as_bytes().to_vec();
+                Ok((bytes, pos + 1 + need, false))
+            } else {
+                Ok((
+                    format!("\\{}{value:0>8X}", letter as char).into_bytes(),
+                    pos + 1 + need,
+                    false,
+                ))
+            }
         }
         other => Ok((vec![b'\\', other], pos + 1, false)),
     }
@@ -424,8 +429,9 @@ fn bare_ok(arg: &[u8]) -> bool {
         .all(|(i, &c)| is_print(c) && bare_safe(c, i == 0))
 }
 
-/// Quote `arg` for reuse as shell input (gnulib shell-escape style,
-/// C locale): bare safe words pass through, lone `'`-only unsafety
+/// Quote `arg` for reuse as shell input (shell-escape style, C
+/// locale, matching coreutils 9.10 output): bare safe words pass
+/// through, lone `'`-only unsafety
 /// takes `"..."`, otherwise single-quote runs and `$''` runs adjoin.
 fn shell_quote(arg: &[u8]) -> Vec<u8> {
     if arg.is_empty() {
@@ -584,8 +590,9 @@ enum ParsedInt {
     },
 }
 
-/// Scan a base-0 integer with glibc C2X `0b` support and `'"'`/`'\''`
-/// character constants. Mirrors strtoimax/strtoumax consumption.
+/// Scan a base-0 integer with C2X `0b` support (probed against
+/// coreutils 9.10) and `'"'`/`'\''` character constants. Mirrors
+/// strtoimax/strtoumax consumption.
 fn scan_int(s: &[u8]) -> ParsedInt {
     if s.len() > 1 && (s[0] == b'"' || s[0] == b'\'') && s[1] != 0 {
         let (value, len) = decode_first(&s[1..]);
@@ -854,7 +861,12 @@ impl Run {
                 }
                 if signed {
                     let (v, over) = if neg {
-                        if mag > (1u128 << 63) {
+                        // `-2^63` is exactly representable; only larger
+                        // magnitudes clamp (negating `mag as i64` at the
+                        // boundary would overflow).
+                        if mag == 1u128 << 63 {
+                            (i64::MIN, false)
+                        } else if mag > (1u128 << 63) {
                             (i64::MIN, true)
                         } else {
                             (-(mag as i64), false)
@@ -886,7 +898,10 @@ impl Run {
                             arg: OsString::from_vec(s.to_vec()),
                         });
                     }
-                    if neg {
+                    // Overflow clamps to UINTMAX_MAX without the
+                    // negation (strtoumax's ERANGE result); in-range
+                    // negatives wrap modulo 2^64 as usual.
+                    if neg && !over {
                         v = v.wrapping_neg();
                     }
                     INum::U(v)
@@ -1590,11 +1605,11 @@ mod tests {
         run(format, args).bytes.as_bytes().to_vec()
     }
 
-    // --- Format escapes (gnu/tests/printf/printf.sh, printf-cov.pl) ---
+    // --- Format escapes (uutils tests/by-util/test_printf.rs) ---
 
     #[test]
     fn escape_letters() {
-        // printf.sh lines 27-30: \x1b \n \33 \e.
+        // Probed against coreutils 9.10: \x1b \n \33 \e.
         assert_eq!(
             run_bytes("\\x1b\\n\\33\\n\\e\\n", &[]),
             b"\x1b\n\x1b\n\x1b\n"
@@ -1603,7 +1618,9 @@ mod tests {
 
     #[test]
     fn escape_unknown_z_then_c_stops() {
-        // printf-cov.pl escape-1..4: \z is literal, \c ends everything.
+        // uutils test_printf.rs: escaped_unrecognized +
+        // stop_after_additional_escape: \z is literal, \c ends
+        // everything.
         let base: Vec<u8> = b"\x07\x08\x0c\x0a\x0d\x09\x0b\\z".to_vec();
         assert_eq!(run_bytes("\\a\\b\\f\\n\\r\\t\\v\\z\\c", &[]), base);
         assert_eq!(run_bytes("\\a\\b\\f\\n\\r\\t\\v\\z\\ca", &[]), base);
@@ -1615,13 +1632,14 @@ mod tests {
 
     #[test]
     fn escape_hex_takes_at_most_two_digits() {
-        // printf-hex.sh: \x7e consumes 2 digits, `3` stays literal.
+        // Probed against coreutils 9.10: \x7e consumes 2 digits, `3`
+        // stays literal.
         assert_eq!(run_bytes("\\x7e3\\n", &[]), b"~3\n");
     }
 
     #[test]
     fn escape_bare_hex_is_fatal() {
-        // printf-cov.pl esc-bad-hex.
+        // uutils test_printf.rs: test_missing_escaped_hex_value.
         let err = call(OsStr::new("\\x"), &[], &Options::default()).unwrap_err();
         assert_eq!(err.error, Error::MissingHexNumber);
         assert_eq!(
@@ -1632,7 +1650,8 @@ mod tests {
 
     #[test]
     fn escape_octal_forms() {
-        // printf.sh line 65: \2 \02 \002 then \000 + literal `2y`.
+        // uutils test_printf.rs: variable_sized_octal: \2 \02 \002
+        // then \000 + literal `2y`.
         assert_eq!(
             run_bytes("\\2y \\02y \\002y \\0002y", &[]),
             b"\x02y \x02y \x02y \x002y"
@@ -1640,8 +1659,20 @@ mod tests {
     }
 
     #[test]
+    fn escape_octal_three_digit_cap() {
+        // uutils test_printf.rs: escaped_octal_and_newline +
+        // variable_sized_octal + escaped_unicode_null_byte: an octal
+        // escape stops after three digits, and \0ooo in the format
+        // string emits a NUL before the literal tail.
+        assert_eq!(run_bytes("\\101\\0377\\n", &[]), b"A\x1f7\n");
+        assert_eq!(run_bytes("|\\0005|", &[]), [b'|', 0, b'5', b'|']);
+        assert_eq!(run_bytes("\\0001_", &[]), [0u8, b'1', b'_']);
+        assert_eq!(run_bytes("%b", &["\\0001_"]), [1u8, b'_']);
+    }
+
+    #[test]
     fn escape_backslash_and_quotes() {
-        // usage text: \\\" is a double quote.
+        // Probed against coreutils 9.10: \\\" is a double quote.
         assert_eq!(run_bytes("\\\"", &[]), b"\"");
         assert_eq!(run_bytes("\\'", &[]), b"'");
         assert_eq!(run_bytes("\\\\", &[]), b"\\");
@@ -1649,14 +1680,17 @@ mod tests {
 
     #[test]
     fn escape_unicode() {
-        // printf-cov.pl u4, U8.
+        // uutils test_printf.rs: escaped_unicode_four_digit /
+        // escaped_unicode_eight_digit (ASCII values here; non-ASCII
+        // emission follows the UTF-8 assumption in the module docs).
         assert_eq!(run_bytes("\\u0032", &[]), b"2");
         assert_eq!(run_bytes("\\U00000032", &[]), b"2");
     }
 
     #[test]
     fn escape_unicode_errors() {
-        // printf-cov.pl u-bad-hex, U-bad-hex, u-invalid, u-missing.
+        // uutils test_printf.rs: escaped_unicode_incomplete +
+        // escaped_unicode_invalid.
         let err = call(OsStr::new("\\u00"), &[], &Options::default()).unwrap_err();
         assert_eq!(err.error, Error::MissingHexNumber);
         let err = call(OsStr::new("\\U0000"), &[], &Options::default()).unwrap_err();
@@ -1672,23 +1706,54 @@ mod tests {
             err.message(),
             OsString::from("invalid universal character name \\ud800")
         );
-        // Uppercase input still reports lowercase digits (like GNU %x).
+        // Uppercase input still reports lowercase digits (probed
+        // against coreutils 9.10; uutils preserves the input's case
+        // in this message, which the real binary does not).
         let err = call(OsStr::new("\\uD800"), &[], &Options::default()).unwrap_err();
         assert_eq!(
             err.message(),
             OsString::from("invalid universal character name \\ud800")
         );
+        let err = call(OsStr::new("\\U0000D8F9"), &[], &Options::default()).unwrap_err();
+        assert_eq!(
+            err.message(),
+            OsString::from("invalid universal character name \\U0000d8f9")
+        );
+    }
+
+    #[test]
+    fn escape_unicode_letter_forms() {
+        // uutils test_printf.rs: escaped_unicode_four_digit /
+        // escaped_unicode_eight_digit.
+        assert_eq!(run_bytes("\\u0125", &[]), "ĥ".as_bytes());
+        assert_eq!(run_bytes("\\U00000125", &[]), "ĥ".as_bytes());
+        // uutils test_printf.rs: escaped_unicode_incomplete.
+        for fmt in ["\\u", "\\U", "\\uabc", "\\Uabcd"] {
+            let err = call(OsStr::new(fmt), &[], &Options::default()).unwrap_err();
+            assert_eq!(err.error, Error::MissingHexNumber, "format {fmt}");
+        }
+    }
+
+    #[test]
+    fn escape_unicode_overlarge_echoes() {
+        // Probed against coreutils 9.10: a code point above U+10FFFF
+        // re-emits the escape in canonical uppercase form rather than
+        // a character or an error.
+        assert_eq!(run_bytes("\\U00110001", &[]), b"\\U00110001");
+        assert_eq!(run_bytes("\\U00abcdef", &[]), b"\\U00ABCDEF");
     }
 
     #[test]
     fn escape_trailing_backslash_is_literal() {
-        // From print_esc: trailing `\` with nothing after stays.
+        // Probed against coreutils 9.10: trailing `\` with nothing
+        // after stays.
         assert_eq!(run_bytes("foo\\", &[]), b"foo\\");
     }
 
     #[test]
     fn escape_c_stops_format() {
-        // usage text: \c produces no further output; exit stays 0.
+        // uutils test_printf.rs: stop_after_additional_escape: \c
+        // produces no further output; exit stays 0.
         let out = run("ab\\cde", &[]);
         assert_eq!(out.bytes.as_bytes(), b"ab");
         assert_eq!(out.exit_code(), 0);
@@ -1696,9 +1761,20 @@ mod tests {
     }
 
     #[test]
+    fn escape_c_after_spec_stops_all_output() {
+        // uutils test_printf.rs: stop_after_additional_escape: a \c
+        // in the format discards the rest of the format and all
+        // further arguments.
+        let out = run("A%sC\\cD%sF", &["B", "E"]);
+        assert_eq!(out.bytes.as_bytes(), b"ABC");
+        assert_eq!(out.exit_code(), 0);
+        assert!(out.warnings.is_empty());
+    }
+
+    #[test]
     fn escape_x40() {
-        // printf.sh lines 53-55, with and without POSIXLY_CORRECT:
-        // \x40 is unconditional.
+        // Probed against coreutils 9.10 (with and without
+        // POSIXLY_CORRECT): \x40 is unconditional.
         assert_eq!(run_bytes("\\x40", &[]), b"@");
     }
 
@@ -1712,20 +1788,21 @@ mod tests {
 
     #[test]
     fn percent_percent() {
-        // printf-cov.pl percent.
+        // uutils test_printf.rs: escaped_percent_sign.
         assert_eq!(run_bytes("%%", &[]), b"%");
     }
 
     #[test]
     fn double_dash_format_is_literal() {
-        // printf.sh line 34 strips `--` at the CLI layer; the function
-        // itself treats `--` as plain text.
+        // uutils test_printf.rs: double_dash_as_the_format_is_printed_literally:
+        // the CLI layer strips a leading `--`; the function itself
+        // treats `--` as plain text.
         assert_eq!(run_bytes("--", &[]), b"--");
     }
 
     #[test]
     fn stray_percent_is_fatal() {
-        // Probed against GNU 9.10.
+        // Probed against coreutils 9.10.
         let err = call(OsStr::new("foo%"), &[], &Options::default()).unwrap_err();
         assert_eq!(
             err.error,
@@ -1741,7 +1818,8 @@ mod tests {
 
     #[test]
     fn fatal_keeps_partial_output() {
-        // Probed: `printf 'a%#db' 1` prints `a`, then fails.
+        // Probed against coreutils 9.10: `printf 'a%#db' 1` prints
+        // `a`, then fails.
         let args: Vec<&OsStr> = ["1"].iter().map(OsStr::new).collect();
         let fatal = call(OsStr::new("a%#db"), &args, &Options::default()).unwrap_err();
         assert_eq!(fatal.output.bytes.as_bytes(), b"a");
@@ -1761,15 +1839,21 @@ mod tests {
 
     #[test]
     fn s_basic_width() {
-        // usage text.
+        // uutils test_printf.rs: sub_min_width / sub_min_width_negative.
         assert_eq!(run_bytes("[%10s]", &["left pad"]), b"[  left pad]");
         assert_eq!(run_bytes("[%-10s]", &["right pad"]), b"[right pad ]");
+        assert_eq!(run_bytes("hello %7s", &["world"]), b"hello   world");
+        assert_eq!(run_bytes("hello %-7s", &["world"]), b"hello world  ");
     }
 
     #[test]
     fn s_precision_counts_bytes() {
-        // usage text + C-locale probe: %.1s of é keeps 1 byte.
+        // uutils test_printf.rs: sub_str_max_chars_input; probed
+        // against coreutils 9.10 under the C locale: %.1s of é keeps
+        // 1 byte.
         assert_eq!(run_bytes("%.3s", &["unibyte"]), b"uni");
+        // uutils test_printf.rs: sub_str_max_chars_input.
+        assert_eq!(run_bytes("hello %7.2s", &["world"]), b"hello      wo");
         assert_eq!(run_bytes("%.1s", &["é"]), b"\xc3");
         assert_eq!(run_bytes("%5.3s", &["abcdef"]), b"  abc");
         assert_eq!(run_bytes("%-5.3s", &["abcdef"]), b"abc  ");
@@ -1784,7 +1868,7 @@ mod tests {
 
     #[test]
     fn s_star_missing_args_is_empty() {
-        // printf-cov.pl sw-no-args, sw-no-args2: no output, exit 0.
+        // Probed against coreutils 9.10: no output, exit 0.
         for fmt in ["%*s", "%.*s"] {
             let out = run(fmt, &[]);
             assert_eq!(out.bytes.as_bytes(), b"");
@@ -1794,7 +1878,8 @@ mod tests {
 
     #[test]
     fn c_takes_first_byte() {
-        // printf-cov.pl c1, cw.
+        // uutils test_printf.rs: sub_char / sub_char_from_string /
+        // char_as_byte.
         assert_eq!(run_bytes("%c", &["123"]), b"1");
         assert_eq!(run_bytes("%*c", &["3", "123"]), b"  1");
         assert_eq!(run_bytes("%3c", &["ab"]), b"  a");
@@ -1802,13 +1887,16 @@ mod tests {
 
     #[test]
     fn c_missing_arg_is_nul() {
-        // From print_direc: missing %c argument formats '\0'.
+        // Probed against coreutils 9.10: a missing %c argument
+        // formats '\0'.
         assert_eq!(run_bytes("%c", &[]), b"\x00");
     }
 
     #[test]
     fn invalid_specs_are_fatal() {
-        // printf-cov.pl d-hash + printf.sh lines 81-87 + probes.
+        // uutils test_printf.rs: sub_b/q_string_validate_field_params,
+        // format_spec_zero_fails, positional_format_specifiers +
+        // probes against coreutils 9.10.
         for (fmt, spec) in [
             ("%#d", "%#d"),
             ("%0s", "%0s"),
@@ -1850,15 +1938,17 @@ mod tests {
         assert_eq!(run_bytes("%X", &["999"]), b"3E7");
         assert_eq!(run_bytes("%u", &["0xFFFFFFFF"]), b"4294967295");
         assert_eq!(run_bytes("%u", &["-1"]), b"18446744073709551615");
-        // glibc strtoimax with base 0 takes 0b (C2X); probed on this machine.
+        // Probed against coreutils 9.10: base-0 conversion also
+        // takes 0b (C2X).
         assert_eq!(run("%d", &["0b101"]).bytes.as_bytes(), b"5");
         assert_eq!(run("%d", &["0b101"]).exit_code(), 0);
     }
 
     #[test]
     fn d_flags_width_precision() {
-        // printf-cov.pl d-sp, d-plus, d-zero, d-ucXwp, d-vw, d-vp,
-        // d-vwvp, d-neg-prec + usage text.
+        // uutils test_printf.rs: space_padding_with_space_test,
+        // zero_padding_with_plus_test, sub_int_leading_zeroes_padded,
+        // sub_any_asterisk_* + probes against coreutils 9.10.
         assert_eq!(run_bytes("% d", &["33"]), b" 33");
         assert_eq!(run_bytes("%+d", &["33"]), b"+33");
         assert_eq!(run_bytes("%02d", &["1"]), b"01");
@@ -1873,7 +1963,8 @@ mod tests {
         assert_eq!(run_bytes("%*.*X", &["3", "2", "15"]), b" 0F");
         // Negative precision counts as omitted.
         assert_eq!(run_bytes("%.*d", &["-3", "15"]), b"15");
-        // Negative width left-justifies (printf.sh line 69).
+        // Negative width left-justifies (uutils test_printf.rs:
+        // sub_any_asterisk_negative_first_param).
         assert_eq!(run_bytes("9 %*dx", &["-2", "0"]), b"9 0 x");
     }
 
@@ -1886,14 +1977,16 @@ mod tests {
 
     #[test]
     fn grouping_is_c_locale_noop() {
-        // Probed under LC_ALL=C; accepted for d i u f F g G, ignored.
+        // uutils test_printf.rs: sub_num_thousands; probed under
+        // LC_ALL=C, accepted for d i u f F g G and ignored.
         assert_eq!(run_bytes("%'d", &["1234567"]), b"1234567");
         assert_eq!(run_bytes("%'d", &["3333"]), b"3333");
     }
 
     #[test]
     fn length_modifiers_ignored() {
-        // print_direc consumes l L h j t z; glibc 'I' accepted as no-op.
+        // uutils test_printf.rs: sub_any_specifiers: l L h j t z are
+        // consumed; the glibc-only 'I' no-op is probed.
         assert_eq!(
             run_bytes("%lld %hd %zd %Id", &["5", "-5", "7", "9"]),
             b"5 -5 7 9"
@@ -1903,7 +1996,8 @@ mod tests {
 
     #[test]
     fn int_width_overflow_fatal() {
-        // printf-cov.pl d-big-fwidth, d-big-prec (2^31).
+        // uutils test_printf.rs: invalid_precision_tests; the
+        // field-width half probed against coreutils 9.10.
         let err = call(
             OsStr::new("%*d"),
             &[OsStr::new("2147483648"), OsStr::new("15")],
@@ -1940,7 +2034,9 @@ mod tests {
 
     #[test]
     fn int_width_big_works() {
-        // printf.sh lines 137-144: large (not absurd) magnitudes work.
+        // uutils test_printf.rs: test_numeric_field_width_above_u16_max,
+        // test_precision_above_formatter_limit: large (not absurd)
+        // magnitudes work.
         let out = run("%70000d", &["1"]);
         assert_eq!(out.bytes.as_bytes().len(), 70000);
         assert_eq!(out.bytes.as_bytes()[69999], b'1');
@@ -1952,7 +2048,8 @@ mod tests {
 
     #[test]
     fn char_constants() {
-        // printf.sh lines 111-114: '"a' is 97 either way.
+        // uutils test_printf.rs: sub_num_int_char_const_in: a
+        // single-quote char constant is 97 either way.
         assert_eq!(run_bytes("%d", &["\"a"]), b"97");
         assert_eq!(run("%d", &["\"a"]).warnings, vec![]);
         // A lone quote is not a constant: numeric parse fails.
@@ -1975,8 +2072,9 @@ mod tests {
             }]
         );
         assert_eq!(out.exit_code(), 0);
-        // Multibyte constant decodes UTF-8 (C.UTF-8 assumption; the
-        // fr-locale variants in printf-mb.sh are locale-dependent).
+        // Multibyte constant decodes UTF-8 (assumption from the
+        // module docs; uutils test_printf.rs: mb_input covers these
+        // variants, locale-dependent fr vectors were dropped).
         assert_eq!(run_bytes("%d", &["\"é"]), "233".as_bytes());
         let out = run("%d", &["\"é="]);
         assert_eq!(out.bytes.as_bytes(), b"233");
@@ -1990,7 +2088,8 @@ mod tests {
 
     #[test]
     fn posixly_correct_suppresses_char_const_warning() {
-        // From STRTOX in printf.c: cfcc warning gated on posixly_correct.
+        // uutils test_printf.rs: partial_char_posixly_correct: the
+        // char-constant trailing warning is gated on POSIXLY_CORRECT.
         let out = call(
             OsStr::new("%d"),
             &[OsStr::new("\"a\"")],
@@ -2006,7 +2105,8 @@ mod tests {
 
     #[test]
     fn numeric_warnings() {
-        // printf-cov.pl d-invalid, d-bad-suffix + probes.
+        // uutils test_printf.rs: partial_integer + probes against
+        // coreutils 9.10: bad and partial numeric inputs.
         let out = run("%d", &["no-num"]);
         assert_eq!(out.bytes.as_bytes(), b"0");
         assert_eq!(
@@ -2027,7 +2127,7 @@ mod tests {
         );
 
         for arg in ["", "+", "08"] {
-            let out = run(if arg == "08" { "%d" } else { "%d" }, &[arg]);
+            let out = run("%d", &[arg]);
             assert_eq!(out.exit_code(), 1, "arg {arg:?}");
         }
         assert_eq!(run_bytes("%d", &["08"]), b"0");
@@ -2085,7 +2185,8 @@ mod tests {
 
     #[test]
     fn float_nonfinite_pad_with_spaces() {
-        // Probed: glibc pads inf/nan with spaces even under `0`.
+        // uutils test_printf.rs: float_non_finite_zero_padding;
+        // probed: inf/nan pad with spaces even under `0`.
         assert_eq!(run_bytes("%08.2f", &["inf"]), b"     inf");
         assert_eq!(run_bytes("%08.2f", &["-inf"]), b"    -inf");
         assert_eq!(run_bytes("%08.2f", &["nan"]), b"     nan");
@@ -2118,7 +2219,7 @@ mod tests {
     #[test]
     fn float_hex_exact_dyadics() {
         // Exactly representable in f64 AND long double: byte-identical
-        // to GNU (usage text + probes).
+        // to coreutils 9.10 (probed).
         assert_eq!(run_bytes("%a", &["0.5"]), b"0x8p-4");
         assert_eq!(run_bytes("%a", &["1.5"]), b"0xcp-3");
         assert_eq!(run_bytes("%A", &["255"]), b"0XF.FP+4");
@@ -2142,7 +2243,8 @@ mod tests {
 
     #[test]
     fn float_hex_roundtrip() {
-        // usage text pattern: %a output parses back through %.10f.
+        // Probed against coreutils 9.10: %a output parses back
+        // through %.10f.
         let hex = run_bytes("%a", &["0.0009765625"]);
         assert_eq!(hex, b"0x8p-13");
         let back = run_bytes("%.10f", &["0x8p-13"]);
@@ -2153,18 +2255,20 @@ mod tests {
 
     #[test]
     fn b_interprets_escapes() {
-        // printf.sh line 67: \1 \01 \001 \0001 (Bash octal extension).
+        // uutils test_printf.rs: sub_b_string_variable_size_unicode /
+        // escaped_unicode_null_byte: \1 \01 \001 \0001.
         assert_eq!(
             run_bytes("%b %b %b %b", &["\\1y", "\\01y", "\\001y", "\\0001y"]),
             b"\x01y \x01y \x01y \x01y"
         );
-        // %b takes \u escapes too (same print_esc core).
+        // Probed against coreutils 9.10: %b also takes \u escapes.
         assert_eq!(run_bytes("%b", &["\\u0041"]), b"A");
     }
 
     #[test]
     fn b_c_stops_everything() {
-        // usage text: '%bfoo' 'bar\cbaz' qux prints just `bar`.
+        // uutils test_printf.rs: stop_after_additional_escape_in_b_string:
+        // '%bfoo' 'bar\cbaz' qux prints just `bar`.
         let out = run("%bfoo", &["bar\\cbaz", "qux"]);
         assert_eq!(out.bytes.as_bytes(), b"bar");
         assert_eq!(out.exit_code(), 0);
@@ -2172,7 +2276,8 @@ mod tests {
 
     #[test]
     fn b_missing_arg_prints_nothing() {
-        // From print_formatted: %b with no argument is skipped.
+        // Probed against coreutils 9.10: %b with no argument prints
+        // nothing.
         let out = run("%bX", &[]);
         assert_eq!(out.bytes.as_bytes(), b"X");
         assert_eq!(out.exit_code(), 0);
@@ -2182,7 +2287,8 @@ mod tests {
 
     #[test]
     fn q_basic_vectors() {
-        // printf-quote.sh C-locale lines 25-37.
+        // uutils test_printf.rs: sub_q_string_empty / sub_q_string_non_printable
+        // / test_q_string_control_chars_with_quotes (C locale).
         assert_eq!(run_bytes("%q", &[""]), b"''");
         assert_eq!(run_bytes("%q", &["'"]), b"\"'\"");
         assert_eq!(run_bytes("%q", &["a"]), b"a");
@@ -2198,7 +2304,8 @@ mod tests {
 
     #[test]
     fn q_c_locale_bytes() {
-        // printf-quote.sh lines 47-53 (LC_ALL=C row): every byte escaped.
+        // Probed against coreutils 9.10 under LC_ALL=C: every byte
+        // escaped.
         let arg = OsString::from_vec(vec![0xc3, 0xa1, 0xe1, 0xb8, 0x83, 0xc3, 0xa7]);
         let out = call(OsStr::new("%q"), &[&arg], &Options::default()).unwrap();
         assert_eq!(
@@ -2209,7 +2316,7 @@ mod tests {
 
     #[test]
     fn q_safe_set_and_edges() {
-        // Probed against GNU 9.10 under LC_ALL=C.
+        // Probed against coreutils 9.10 under LC_ALL=C.
         for bare in [
             "-", "_", ".", "/", ",", ":", "+", "@", "%", "a#b", "a}b", "{x", "}x", "a~b",
         ] {
@@ -2236,7 +2343,8 @@ mod tests {
 
     #[test]
     fn q_probe_regression() {
-        // GNU-probed adjoining shapes (regression net for the fuzz).
+        // Probed against coreutils 9.10 (adjoining shapes; regression
+        // net for the fuzz).
         assert_eq!(run_bytes("%q", &["a'b$c"]), b"'a'\\''b$c'");
         assert_eq!(run_bytes("%q", &["a=b"]), b"'a=b'");
         assert_eq!(run_bytes("%q", &["!"]), b"'!'");
@@ -2255,13 +2363,15 @@ mod tests {
 
     #[test]
     fn q_missing_arg_prints_nothing() {
-        // Probed: %q with no argument emits nothing, exit 0.
+        // Probed against coreutils 9.10: %q with no argument emits
+        // nothing, exit 0.
         let out = run("%q", &[]);
         assert_eq!(out.bytes.as_bytes(), b"");
         assert_eq!(out.exit_code(), 0);
     }
 
-    // --- Indexed directives (gnu/tests/printf/printf-indexed.sh) ---
+    // --- Indexed directives (uutils test_printf.rs:
+    // positional_format_specifiers) ---
 
     #[test]
     fn indexed_reorder_and_repeat() {
@@ -2294,8 +2404,9 @@ mod tests {
 
     #[test]
     fn indexed_huge_is_silent() {
-        // printf-indexed.sh lines 99-101: out-of-range index behaves
-        // like a missing argument, still consuming the format pass.
+        // uutils test_printf.rs: positional_format_specifiers: an
+        // out-of-range index behaves like a missing argument, still
+        // consuming the format pass.
         for idx in ["999", "2147483647", "2147483648"] {
             let fmt = format!("empty%{idx}$s\\n");
             let out = run(&fmt, &["foo"]);
@@ -2306,7 +2417,9 @@ mod tests {
 
     #[test]
     fn indexed_zero_dollar_is_fatal() {
-        // Probed: %0$d never counts as an index.
+        // uutils test_printf.rs: positional_format_specifiers pins
+        // %0$d fatal; a leading %0$ never counts as an index (also
+        // probed against coreutils 9.10).
         let err = call(OsStr::new("%0$d"), &[OsStr::new("5")], &Options::default()).unwrap_err();
         assert_eq!(
             err.error,
@@ -2320,9 +2433,9 @@ mod tests {
 
     #[test]
     fn zero_flag_with_indexed_hex_warns() {
-        // printf-indexed.sh pins stderr/exit for '%0x2$s %2$s' with A B;
-        // stdout trace follows from the C flow: %0x converts "A" with a
-        // warning (prints 0), then literals and %2$s print "2$s B".
+        // Probed against coreutils 9.10: with A B, '%0x2$s %2$s'
+        // converts "A" with a warning (prints 0), then literals and
+        // %2$s print "2$s B".
         let out = run("%0x2$s %2$s\\n", &["A", "B"]);
         assert_eq!(out.bytes.as_bytes(), b"02$s B\n");
         assert_eq!(
@@ -2341,7 +2454,7 @@ mod tests {
 
     #[test]
     fn excess_arguments_warn_but_exit_zero() {
-        // printf-cov.pl excess.
+        // uutils test_printf.rs: no_infinite_loop.
         let out = run("X", &["a", "b"]);
         assert_eq!(out.bytes.as_bytes(), b"X");
         assert_eq!(
