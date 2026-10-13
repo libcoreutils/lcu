@@ -17,5 +17,5 @@ pub struct Options {
 
 /// Entry point for `sha384sum`. Explicit params only, no implicit state.
 pub fn call(_options: &Options) -> Result<(), Error> {
-    todo!("port from GNU/uutils behavior")
+    todo!("port from uutils behavior")
 }
