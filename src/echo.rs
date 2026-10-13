@@ -6,13 +6,15 @@
 //! two option flags that affect output: whether backslash escapes are in
 //! effect and whether the trailing newline is suppressed.
 //!
-//! Behavior modeled on installed GNU coreutils 9.10 under `LC_ALL=C`:
+//! Output rules probed against coreutils 9.10 under `LC_ALL=C`, with the
+//! applicable cases cross-checked against uutils `tests/by-util/test_echo.rs`:
 //! - Default is no escape processing.
 //! - `-e` enables escape processing.
 //! - `-E` disables escape processing.
 //! - `-n` suppresses the trailing newline.
 //! - `echo` has no `\\u`/`\\U`/`\\"` escapes.
-//! - Octal accepts up to 3 digits and the `\\0NNN` GNU 4-digit form.
+//! - Octal accepts up to 3 digits, or 4 when the first digit is `0`
+//!   (the `\\0NNN` form).
 //! - Incomplete `\\x` is emitted literally.
 //! - `\\c` stops all further output; exit stays success.
 
@@ -31,7 +33,7 @@ pub struct Options {
 /// Error type for `echo`.
 ///
 /// `echo` never fails in the core: every operand list maps to output
-/// bytes and GNU echo exits 0 (write failures happen in the CLI), so
+/// bytes and `echo` exits 0 (write failures happen in the CLI), so
 /// this enum has no variants.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {}
@@ -55,7 +57,8 @@ pub fn call(args: &[&OsStr], options: &Options) -> Result<OsString, Error> {
             out.extend_from_slice(arg.as_encoded_bytes());
         }
     }
-    // GNU: `\c` stops all further output, including the trailing newline.
+    // uutils test_echo.rs: test_escape_no_further_output — `\c` stops all
+    // further output, including the trailing newline.
     if !stopped && !options.no_newline {
         out.push(b'\n');
     }
@@ -104,10 +107,12 @@ fn parse_echo_escape(s: &[u8], pos: usize) -> (Vec<u8>, usize, bool) {
 }
 
 /// Parse an octal escape starting at `pos`, where `s[pos]` is the first
-/// octal digit. GNU caps octal escapes by digit count: a leading `0`
-/// allows 4 digits total (the `\0NNN` form), any other first digit
+/// octal digit. Coreutils caps octal escapes by digit count: a leading
+/// `0` allows 4 digits total (the `\0NNN` form), any other first digit
 /// allows 3. The accumulated value is masked to 8 bits; digits beyond
-/// the cap stay literal. All limits probed against GNU 9.10.
+/// the cap stay literal. Limits probed against coreutils 9.10 and
+/// consistent with uutils test_echo.rs (`old_octal_syntax`,
+/// `nine_bit_octal`, `wrapping_octal`).
 fn parse_echo_octal(s: &[u8], pos: usize) -> (Vec<u8>, usize, bool) {
     let max = if s[pos] == b'0' { 4 } else { 3 };
     let mut p = pos;
@@ -135,7 +140,8 @@ fn parse_echo_hex(s: &[u8], mut pos: usize) -> (Vec<u8>, usize, bool) {
         n += 1;
     }
     if n == 0 {
-        // GNU: `\x` with no hex digits is emitted literally.
+        // uutils test_echo.rs: test_escape_no_hex — `\x` with no hex
+        // digits is emitted literally.
         return (vec![b'\\', b'x'], pos, false);
     }
     (vec![(val & 0xff) as u8], pos, false)
@@ -251,7 +257,8 @@ mod tests {
 
     #[test]
     fn escape_octal_short() {
-        // Probed against GNU 9.10: `\0101` reads digits "101" -> 65.
+        // uutils test_echo.rs: test_escape_recognized_sequences_still_expand
+        // — a leading `0` lets `\0101` read four digits `0101` -> 65 = 'A'.
         assert_eq!(out_bytes(&["\\0101"], true, false), b"A\n");
     }
 
@@ -265,10 +272,12 @@ mod tests {
         assert_eq!(out_bytes(&["\\0100"], true, false), b"@\n");
     }
 
-    // GNU caps octal escapes by digit count, not by value: a leading
+    // Octal escapes are capped by digit count, not by value: a leading
     // `0` allows 4 octal digits total, any other first digit allows 3.
     // The value is masked to 8 bits; excess digits stay literal.
-    // All expectations probed against GNU 9.10 (`LC_ALL=C echo -e`).
+    // Probed against coreutils 9.10 (`LC_ALL=C echo -e`); the same capping
+    // appears in uutils test_echo.rs: `old_octal_syntax`, `nine_bit_octal`
+    // and `wrapping_octal` agree with these expectations.
 
     #[test]
     fn escape_octal_3_digit_cap_leaves_rest_literal() {
@@ -411,12 +420,222 @@ mod tests {
 
     #[test]
     fn escape_c_stops_further_args() {
-        // Probed against GNU 9.10: `echo -e 'a\cb' c` prints just `a`.
+        // uutils test_echo.rs: test_escape_no_further_output — `a\cb` in the
+        // first operand suppresses the rest of the line; prints just `a`.
         assert_eq!(out_bytes(&["a\\cb", "c"], true, false), b"a");
     }
 
     #[test]
     fn multiple_args_space_separated_with_escapes() {
         assert_eq!(out_bytes(&["a\\nb", "c"], true, false), b"a\nb c\n");
+    }
+
+    // Cases below re-anchored to uutils `tests/by-util/test_echo.rs`;
+    // expectations cross-checked against coreutils 9.10 under LC_ALL=C.
+
+    #[test]
+    fn hex_escape_with_single_digit_value() {
+        // uutils test_echo.rs: test_escape_short_hex — one hex digit is
+        // enough; the run ends at the following space.
+        assert_eq!(out_bytes(&["foo\\xa bar"], true, false), b"foo\n bar\n");
+    }
+
+    #[test]
+    fn backslash_before_space_stays_literal() {
+        // uutils test_echo.rs: test_escape_one_slash — a space after the
+        // backslash is not an escape; both bytes survive.
+        assert_eq!(out_bytes(&["foo\\ bar"], true, false), b"foo\\ bar\n");
+    }
+
+    #[test]
+    fn trailing_backslash_does_not_reach_next_operand() {
+        // uutils test_echo.rs: test_escape_one_slash_multi — a backslash at
+        // the end of one operand stays literal there; operands then join
+        // with a single space.
+        assert_eq!(out_bytes(&["foo\\", "bar"], true, false), b"foo\\ bar\n");
+    }
+
+    #[test]
+    fn newline_escape_before_text() {
+        // uutils test_echo.rs: test_escape_newline.
+        assert_eq!(out_bytes(&["\\na"], true, false), b"\na\n");
+    }
+
+    #[test]
+    fn literal_newline_in_operand_survives_escapes() {
+        // uutils test_echo.rs: test_backslash_n_last_char_in_last_argument —
+        // a real newline byte in an operand passes through untouched, with
+        // or without escape processing; `-n` only drops the appended one.
+        assert_eq!(out_bytes(&["foo\n"], true, false), b"foo\n\n");
+        assert_eq!(out_bytes(&["foo\n"], false, true), b"foo\n");
+    }
+
+    #[test]
+    fn octal_escape_embedded_in_text() {
+        // uutils test_echo.rs: test_escape_short_octal — `040` is space.
+        assert_eq!(out_bytes(&["foo\\040bar"], true, false), b"foo bar\n");
+    }
+
+    #[test]
+    fn nul_escape_embedded_in_text() {
+        // uutils test_echo.rs: test_escape_nul — a bare `\0` yields NUL and
+        // the run ends at the following space.
+        assert_eq!(out_bytes(&["foo\\0 bar"], true, false), b"foo\x00 bar\n");
+    }
+
+    #[test]
+    fn octal_escape_stops_at_invalid_digit_in_text() {
+        // uutils test_echo.rs: test_escape_octal_invalid_digit — `8` is not
+        // octal, so the leading `0` alone becomes NUL and `8` stays literal.
+        assert_eq!(out_bytes(&["foo\\08 bar"], true, false), b"foo\x008 bar\n");
+    }
+
+    #[test]
+    fn unicode_style_escapes_stay_literal() {
+        // uutils test_echo.rs: test_escape_unicode_and_quote_not_recognized —
+        // there is no `\u`, `\U` or `\"` escape; backslash and follower are
+        // printed as given, even mid-string or back to back.
+        for arg in ["a\\u0041b", "a\\U00000041b", "a\\\"b", "\\u\\u"] {
+            assert_eq!(
+                out_bytes(&[arg], true, false),
+                format!("{arg}\n").as_bytes()
+            );
+        }
+    }
+
+    #[test]
+    fn malformed_unicode_escapes_stay_literal() {
+        // uutils test_echo.rs: test_escape_malformed_unicode_not_recognized —
+        // truncated, non-hex, surrogate and out-of-range payloads consume
+        // nothing beyond the escape letter and no error is reported.
+        for arg in ["\\u", "\\U", "\\u00", "\\u00zz", "\\uD800", "\\U00110000"] {
+            assert_eq!(
+                out_bytes(&[arg], true, false),
+                format!("{arg}\n").as_bytes()
+            );
+        }
+    }
+
+    #[test]
+    fn disabled_escapes_keep_every_sequence_literal() {
+        // uutils test_echo.rs: test_disable_escapes — with escapes off the
+        // operand round-trips byte for byte, whatever it contains.
+        let input = "\\a \\\\ \\b \\r \\e \\f \\x41 \\n a\\cb \\u0100 \\t \\v";
+        assert_eq!(
+            out_bytes(&[input], false, false),
+            format!("{input}\n").as_bytes()
+        );
+    }
+
+    #[test]
+    fn octal_escapes_wrap_to_eight_bits() {
+        // uutils test_echo.rs: wrapping_octal and nine_bit_octal — a fully
+        // consumed count overflows one byte and wraps.
+        assert_eq!(out_bytes(&["\\0501"], true, false), b"A\n");
+        assert_eq!(out_bytes(&["\\0777"], true, false), b"\xff\n");
+    }
+
+    #[test]
+    fn octal_forms_without_leading_zero() {
+        // uutils test_echo.rs: old_octal_syntax — short runs before text,
+        // two-digit values, and the 3-digit cap leaving excess literal.
+        assert_eq!(out_bytes(&["\\1foo"], true, false), b"\x01foo\n");
+        assert_eq!(out_bytes(&["\\43foo"], true, false), b"#foo\n");
+        assert_eq!(out_bytes(&["\\101 foo"], true, false), b"A foo\n");
+        assert_eq!(out_bytes(&["\\1011"], true, false), b"A1\n");
+    }
+
+    #[test]
+    fn hex_escapes_build_multibyte_utf8() {
+        // uutils test_echo.rs: multibyte_escape_unicode — consecutive `\x`
+        // escapes emit raw bytes, valid UTF-8 or not.
+        assert_eq!(
+            out_bytes(&["\\xf0\\x9f\\x98\\x82"], true, false),
+            "\u{1F602}\n".as_bytes()
+        );
+        assert_eq!(
+            out_bytes(&["\\x41\\xf0\\x9f\\x98\\x82\\x42"], true, false),
+            "A\u{1F602}B\n".as_bytes()
+        );
+        assert_eq!(
+            out_bytes(&["\\xf0\\x41\\x9f\\x98\\x82"], true, false),
+            &[0xf0, b'A', 0x9f, 0x98, 0x82, b'\n']
+        );
+    }
+
+    #[test]
+    fn control_c_after_hex_halts_output() {
+        // uutils test_echo.rs: multibyte_escape_unicode — `\c` truncates the
+        // stream mid-operand and suppresses the trailing newline.
+        assert_eq!(
+            out_bytes(&["\\x41\\xf0\\c\\x9f\\x98\\x82"], true, false),
+            b"A\xf0"
+        );
+    }
+
+    #[test]
+    fn hex_byte_round_trips_raw_value() {
+        // uutils test_echo.rs: non_utf_8_hex_round_trip — bytes above 0x7f
+        // come back unchanged.
+        assert_eq!(out_bytes(&["\\xFF"], true, false), [0xff, b'\n']);
+    }
+
+    #[test]
+    fn recognized_escapes_all_expand_together() {
+        // uutils test_echo.rs: test_escape_recognized_sequences_still_expand
+        // — every supported letter form in one operand, mixed styles too.
+        assert_eq!(
+            out_bytes(&["\\a\\b\\e\\f\\n\\r\\t\\v\\\\"], true, false),
+            b"\x07\x08\x1b\x0c\n\r\t\x0b\\\n"
+        );
+        assert_eq!(out_bytes(&["\\0101\\101\\x41"], true, false), b"AAA\n");
+    }
+
+    #[test]
+    fn raw_non_utf8_operand_passes_through() {
+        // uutils test_echo.rs: non_utf_8 — arbitrary byte operands are
+        // copied verbatim; nothing in the core requires UTF-8.
+        use std::os::unix::ffi::OsStrExt;
+        let raw = OsStr::from_bytes(b"caf\xe9 na\xefve");
+        for escapes in [false, true] {
+            let out = call(
+                &[raw],
+                &Options {
+                    escapes,
+                    no_newline: true,
+                },
+            )
+            .unwrap();
+            assert_eq!(out.as_encoded_bytes(), b"caf\xe9 na\xefve");
+        }
+    }
+
+    #[test]
+    fn utf8_operands_pass_through_unchanged() {
+        // uutils test_echo.rs: test_emoji_output — multibyte text is never
+        // re-encoded, with or without the trailing newline.
+        assert_eq!(
+            out_bytes(&["Hello 🌍 World 🚀"], false, false),
+            "Hello 🌍 World 🚀\n".as_bytes()
+        );
+        assert_eq!(
+            out_bytes(&["Status: 🎯 Complete"], false, true),
+            "Status: 🎯 Complete".as_bytes()
+        );
+        assert_eq!(
+            out_bytes(&["こんにちは世界"], false, false),
+            "こんにちは世界\n".as_bytes()
+        );
+    }
+
+    #[test]
+    fn operands_keep_their_internal_and_trailing_spaces() {
+        // uutils test_echo.rs: test_hyphen_values_between — once these are
+        // operands, joining is one space between them; inner and trailing
+        // spaces of each operand are preserved.
+        assert_eq!(
+            out_bytes(&["dumdum ", "dum dum dum", "-e", "dum"], false, false),
+            b"dumdum  dum dum dum -e dum\n"
+        );
     }
 }
